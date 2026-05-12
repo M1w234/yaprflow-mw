@@ -12,6 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         installStatusItem()
         _ = NotchOverlayWindowController.shared
         registerHotkey()
+        registerHistoryHotkey()
+
+        // Eagerly instantiate the history store so its Combine subscription
+        // on `AppState.$lastTranscript` is live before the first dictation.
+        _ = ClipboardHistoryStore.shared
 
         // Warm the ASR + VAD models in the background so the first hotkey press
         // doesn't block on the ~30s Encoder compile. On first launch this also
@@ -43,6 +48,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationWillTerminate(_ notification: Notification) {
         GlobalHotkey.shared.unregister()
         ModifierOnlyHotkey.shared.unregister()
+        HistoryHotkey.shared.unregister()
+    }
+
+    private func registerHistoryHotkey() {
+        HistoryHotkey.onPressed = {
+            Task { @MainActor in
+                ClipboardHistoryWindowController.shared.toggle()
+            }
+        }
+        HistoryHotkey.shared.register()
+    }
+
+    @objc private func showHistory() {
+        ClipboardHistoryWindowController.shared.show()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -122,6 +141,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             isEnabled: { !AppState.shared.lastTranscript.isEmpty }
         )
         menu.addItem(summarizeItem)
+
+        // Clipboard history — opens the floating panel. Also bound to ⌃⌥V
+        // as a global hotkey (see `registerHistoryHotkey`).
+        let historyItem = NSMenuItem()
+        historyItem.view = IconActionMenuItemView(
+            symbolName: "clock.arrow.circlepath",
+            title: "Show History…",
+            shortcut: "⌃⌥V",
+            target: self,
+            action: #selector(showHistory)
+        )
+        menu.addItem(historyItem)
 
         menu.addItem(NSMenuItem.separator())
 

@@ -10,6 +10,7 @@ import AppKit
 final class IconActionMenuItemView: NSView {
     private let iconView = NSImageView()
     private let titleField = NSTextField(labelWithString: "")
+    private let shortcutField = NSTextField(labelWithString: "")
     private weak var actionTarget: AnyObject?
     private let action: Selector
     private let isEnabledProvider: () -> Bool
@@ -19,16 +20,17 @@ final class IconActionMenuItemView: NSView {
     init(
         symbolName: String,
         title: String,
+        shortcut: String? = nil,
         target: AnyObject,
         action: Selector,
-        isEnabled: @escaping () -> Bool
+        isEnabled: @escaping () -> Bool = { true }
     ) {
         self.actionTarget = target
         self.action = action
         self.isEnabledProvider = isEnabled
         super.init(frame: NSRect(x: 0, y: 0, width: 220, height: 22))
         autoresizingMask = [.width]
-        setup(symbolName: symbolName, title: title)
+        setup(symbolName: symbolName, title: title, shortcut: shortcut)
         updateAppearance()
     }
 
@@ -38,7 +40,7 @@ final class IconActionMenuItemView: NSView {
         NSSize(width: NSView.noIntrinsicMetric, height: 22)
     }
 
-    private func setup(symbolName: String, title: String) {
+    private func setup(symbolName: String, title: String, shortcut: String?) {
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconView.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
         iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .regular)
@@ -50,6 +52,13 @@ final class IconActionMenuItemView: NSView {
         titleField.lineBreakMode = .byTruncatingTail
         addSubview(titleField)
 
+        shortcutField.translatesAutoresizingMaskIntoConstraints = false
+        shortcutField.font = NSFont.menuFont(ofSize: 0)
+        shortcutField.stringValue = shortcut ?? ""
+        shortcutField.textColor = .tertiaryLabelColor
+        shortcutField.alignment = .right
+        addSubview(shortcutField)
+
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -58,7 +67,10 @@ final class IconActionMenuItemView: NSView {
 
             titleField.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
             titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            titleField.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+
+            shortcutField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            shortcutField.firstBaselineAnchor.constraint(equalTo: titleField.firstBaselineAnchor),
+            shortcutField.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: 16),
         ])
     }
 
