@@ -14,12 +14,12 @@ enum SoundEffect {
     case start
     case stop
 
-    /// Defaults chosen for the feel they convey: a soft wind puff (Blow) to ramp
-    /// into recording, and a clean descending chime (Glass) to pair with the
-    /// green checkmark on stop. Used by AppState on first launch and by
-    /// "Reset to Defaults" in the menu.
-    nonisolated static let defaultStartName = "Blow"
-    nonisolated static let defaultStopName = "Glass"
+    /// Defaults chosen for the feel they convey: a single short croak (Frog)
+    /// to signal recording started, and a satisfying pop (Bottle) when it
+    /// stops. Used by AppState on first launch and by "Reset to Defaults" in
+    /// the menu.
+    nonisolated static let defaultStartName = "Frog"
+    nonisolated static let defaultStopName = "Bottle"
 
     /// Stable list of macOS system sounds, used as a fallback if the sandbox
     /// or a filesystem hiccup blocks directory enumeration. These names have
