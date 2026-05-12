@@ -158,7 +158,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nSRC=\"$SRCROOT/Models\"\nDEST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Models\"\nif [ -d \"$SRC\" ]; then\n  mkdir -p \"$DEST\"\n  rsync -a --delete --exclude '.cache' --exclude '.DS_Store' \"$SRC/\" \"$DEST/\"\nelse\n  echo \"warning: Models/ missing — run scripts/fetch-models.sh\"\nfi\n";
+			shellScript = "set -e\nSRC=\"$SRCROOT/Models\"\nDEST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Models\"\nif [ ! -d \"$SRC/parakeet-tdt-0.6b-v2/Encoder.mlmodelc\" ]; then\n  echo \"error: Speech model missing at $SRC/parakeet-tdt-0.6b-v2/. Run scripts/fetch-models.sh once (~250 MB) before building.\" >&2\n  exit 1\nfi\nmkdir -p \"$DEST\"\nrsync -a --delete --exclude '.cache' --exclude '.DS_Store' \"$SRC/\" \"$DEST/\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
