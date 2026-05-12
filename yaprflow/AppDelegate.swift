@@ -4,6 +4,8 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var statusItem: NSStatusItem?
+    private var startSoundPickerMenu: NSMenu?
+    private var stopSoundPickerMenu: NSMenu?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -82,10 +84,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         autoPasteItem.toolTip = "After transcription, automatically paste into the focused text field. Requires Accessibility permission (System Settings → Privacy & Security → Accessibility)."
         menu.addItem(autoPasteItem)
 
-        let soundEffectsItem = NSMenuItem()
-        soundEffectsItem.view = SoundEffectsMenuItemView()
-        soundEffectsItem.toolTip = "Play a short system sound when recording starts and stops."
-        menu.addItem(soundEffectsItem)
+        let soundsItem = NSMenuItem(title: "Sound Effects", action: nil, keyEquivalent: "")
+        soundsItem.image = NSImage(systemSymbolName: "speaker.wave.2", accessibilityDescription: nil)
+        soundsItem.submenu = buildSoundsSubmenu()
+        soundsItem.toolTip = "Toggle start/stop chimes and pick which system sounds to use."
+        menu.addItem(soundsItem)
 
         let launchAtLoginItem = NSMenuItem()
         launchAtLoginItem.view = LaunchAtLoginMenuItemView()
@@ -191,7 +194,111 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if menuItem.action == #selector(copySummary) {
             return !AppState.shared.lastTranscript.isEmpty
         }
+        if menuItem.action == #selector(resetSoundsToDefaults) {
+            return AppState.shared.startSoundName != SoundEffect.defaultStartName
+                || AppState.shared.stopSoundName != SoundEffect.defaultStopName
+        }
         return true
+    }
+
+    // MARK: - Sound Effects submenu
+
+    /// Builds the "Sound Effects" submenu: an Enabled toggle, two sound-picker
+    /// submenus (start / stop), and a reset action. Built once at launch and
+    /// kept alive for the app's lifetime — checkmark state is maintained
+    /// imperatively by the action handlers so we don't need to rebuild.
+    private func buildSoundsSubmenu() -> NSMenu {
+        let submenu = NSMenu()
+
+        let enabledItem = NSMenuItem(
+            title: "Enabled",
+            action: #selector(toggleSoundsEnabled(_:)),
+            keyEquivalent: ""
+        )
+        enabledItem.target = self
+        enabledItem.state = AppState.shared.soundEffectsEnabled ? .on : .off
+        submenu.addItem(enabledItem)
+
+        submenu.addItem(NSMenuItem.separator())
+
+        let startPicker = buildSoundPickerMenu(forStart: true)
+        self.startSoundPickerMenu = startPicker
+        let startParent = NSMenuItem(title: "Start Sound", action: nil, keyEquivalent: "")
+        startParent.submenu = startPicker
+        submenu.addItem(startParent)
+
+        let stopPicker = buildSoundPickerMenu(forStart: false)
+        self.stopSoundPickerMenu = stopPicker
+        let stopParent = NSMenuItem(title: "Stop Sound", action: nil, keyEquivalent: "")
+        stopParent.submenu = stopPicker
+        submenu.addItem(stopParent)
+
+        submenu.addItem(NSMenuItem.separator())
+
+        let resetItem = NSMenuItem(
+            title: "Reset to Defaults",
+            action: #selector(resetSoundsToDefaults),
+            keyEquivalent: ""
+        )
+        resetItem.target = self
+        submenu.addItem(resetItem)
+
+        return submenu
+    }
+
+    private func buildSoundPickerMenu(forStart: Bool) -> NSMenu {
+        let menu = NSMenu()
+        let current = forStart
+            ? AppState.shared.startSoundName
+            : AppState.shared.stopSoundName
+        let selector: Selector = forStart
+            ? #selector(selectStartSound(_:))
+            : #selector(selectStopSound(_:))
+        for name in SoundEffect.availableSounds() {
+            let item = NSMenuItem(title: name, action: selector, keyEquivalent: "")
+            item.target = self
+            item.representedObject = name
+            item.state = (name == current) ? .on : .off
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    @objc private func toggleSoundsEnabled(_ sender: NSMenuItem) {
+        AppState.shared.soundEffectsEnabled.toggle()
+        sender.state = AppState.shared.soundEffectsEnabled ? .on : .off
+    }
+
+    @objc private func selectStartSound(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+        AppState.shared.startSoundName = name
+        refreshSoundCheckmarks(in: sender.menu, current: name)
+        // Bypass the enabled gate so users can audition while picking, even
+        // with chimes turned off overall.
+        SoundEffect.preview(name)
+    }
+
+    @objc private func selectStopSound(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+        AppState.shared.stopSoundName = name
+        refreshSoundCheckmarks(in: sender.menu, current: name)
+        SoundEffect.preview(name)
+    }
+
+    @objc private func resetSoundsToDefaults() {
+        AppState.shared.startSoundName = SoundEffect.defaultStartName
+        AppState.shared.stopSoundName = SoundEffect.defaultStopName
+        refreshSoundCheckmarks(in: startSoundPickerMenu, current: SoundEffect.defaultStartName)
+        refreshSoundCheckmarks(in: stopSoundPickerMenu, current: SoundEffect.defaultStopName)
+    }
+
+    private func refreshSoundCheckmarks(in menu: NSMenu?, current: String) {
+        guard let menu else { return }
+        for item in menu.items {
+            if let name = item.representedObject as? String {
+                item.state = (name == current) ? .on : .off
+            }
+        }
     }
 
     private func registerHotkey() {

@@ -20,6 +20,8 @@ final class AppState: ObservableObject {
     private static let grammarModeKey = "yaprflow.grammarMode"
     private static let autoPasteModeKey = "yaprflow.autoPasteMode"
     private static let soundEffectsEnabledKey = "yaprflow.soundEffectsEnabled"
+    private static let startSoundNameKey = "yaprflow.startSoundName"
+    private static let stopSoundNameKey = "yaprflow.stopSoundName"
     private static let lastTranscriptKey = "yaprflow.lastTranscript"
 
     @Published var status: TranscriptionStatus = .idle
@@ -56,12 +58,30 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// When `true`, play a short system sound on recording start (Pop) and
-    /// stop (Tink). Defaults to on — chimes are a small but useful signal that
-    /// the mic is actually live, especially on flaky hotkeys.
+    /// When `true`, play a short system sound on recording start and stop.
+    /// Defaults to on — chimes are a small but useful signal that the mic is
+    /// actually live, especially on flaky hotkeys. The specific sounds are
+    /// picked via `startSoundName` / `stopSoundName`.
     @Published var soundEffectsEnabled: Bool {
         didSet {
             UserDefaults.standard.set(soundEffectsEnabled, forKey: Self.soundEffectsEnabledKey)
+        }
+    }
+
+    /// Name of the macOS system sound played at recording start. Resolved by
+    /// `NSSound(named:)`, so values must match a basename in
+    /// `/System/Library/Sounds/` (without the .aiff extension).
+    @Published var startSoundName: String {
+        didSet {
+            UserDefaults.standard.set(startSoundName, forKey: Self.startSoundNameKey)
+        }
+    }
+
+    /// Name of the macOS system sound played at recording stop. See
+    /// `startSoundName` for resolution semantics.
+    @Published var stopSoundName: String {
+        didSet {
+            UserDefaults.standard.set(stopSoundName, forKey: Self.stopSoundNameKey)
         }
     }
 
@@ -104,6 +124,10 @@ final class AppState: ObservableObject {
         } else {
             self.soundEffectsEnabled = true
         }
+        self.startSoundName = UserDefaults.standard.string(forKey: Self.startSoundNameKey)
+            ?? SoundEffect.defaultStartName
+        self.stopSoundName = UserDefaults.standard.string(forKey: Self.stopSoundNameKey)
+            ?? SoundEffect.defaultStopName
         self.lastTranscript = UserDefaults.standard.string(forKey: Self.lastTranscriptKey) ?? ""
     }
 }
