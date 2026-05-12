@@ -33,15 +33,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             queue: .main
         ) { _ in
             MainActor.assumeIsolated {
-                let config = AppState.shared.hotkey
-                self.wireHotkeyCallbacks(for: config.mode)
-                GlobalHotkey.shared.register(keyCode: config.keyCode, modifiers: config.modifiers)
+                self.registerHotkey()
             }
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         GlobalHotkey.shared.unregister()
+        ModifierOnlyHotkey.shared.unregister()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -197,8 +196,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func registerHotkey() {
         let config = AppState.shared.hotkey
-        wireHotkeyCallbacks(for: config.mode)
-        GlobalHotkey.shared.register(keyCode: config.keyCode, modifiers: config.modifiers)
+
+        // Exactly one backend active at a time.
+        if config.isModifierOnly {
+            GlobalHotkey.shared.unregister()
+            guard config.isValid else { return }
+            wireModifierOnlyCallbacks()
+            ModifierOnlyHotkey.shared.register(modifiers: config.modifiers)
+        } else {
+            ModifierOnlyHotkey.shared.unregister()
+            wireHotkeyCallbacks(for: config.mode)
+            GlobalHotkey.shared.register(keyCode: config.keyCode, modifiers: config.modifiers)
+        }
+    }
+
+    /// Modifier-only bindings always support both hold-to-talk and
+    /// double-tap-to-lock simultaneously. `ModifierOnlyHotkey` handles the
+    /// gesture state internally and only fires onStart / onStop on actual
+    /// recording-state transitions, so wiring is symmetric and idempotent.
+    private func wireModifierOnlyCallbacks() {
+        ModifierOnlyHotkey.onStart = {
+            Task { @MainActor in
+                TranscriptionController.shared.setActive(true)
+            }
+        }
+        ModifierOnlyHotkey.onStop = {
+            Task { @MainActor in
+                TranscriptionController.shared.setActive(false)
+            }
+        }
     }
 
     private func wireHotkeyCallbacks(for mode: HotkeyMode) {

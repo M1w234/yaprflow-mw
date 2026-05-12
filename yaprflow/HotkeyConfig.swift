@@ -7,6 +7,11 @@ enum HotkeyMode: String, Codable {
 }
 
 struct HotkeyConfig: Codable, Equatable {
+    /// Sentinel value used in `keyCode` to indicate a modifier-only binding
+    /// (e.g. ⌘⇧ alone, no key). Modifier-only bindings can't go through
+    /// Carbon's `RegisterEventHotKey` — they're handled by `ModifierOnlyHotkey`.
+    static let modifierOnlyKeyCode: UInt32 = 0
+
     var keyCode: UInt32
     var modifiers: UInt32
     var mode: HotkeyMode
@@ -15,6 +20,17 @@ struct HotkeyConfig: Codable, Equatable {
         self.keyCode = keyCode
         self.modifiers = modifiers
         self.mode = mode
+    }
+
+    var isModifierOnly: Bool {
+        keyCode == Self.modifierOnlyKeyCode
+    }
+
+    /// A modifier-only binding with no modifiers set is nonsensical and would
+    /// fire on every flagsChanged transition — reject it.
+    var isValid: Bool {
+        if isModifierOnly { return modifiers != 0 }
+        return true
     }
 
     static let defaultHotkey = HotkeyConfig(
@@ -52,8 +68,10 @@ struct HotkeyConfig: Codable, Equatable {
         if modifiers & UInt32(optionKey) != 0  { s += "⌥" }
         if modifiers & UInt32(shiftKey) != 0   { s += "⇧" }
         if modifiers & UInt32(cmdKey) != 0     { s += "⌘" }
-        s += Self.name(for: keyCode)
-        if mode == .holdToTalk { s += "  (hold)" }
+        if !isModifierOnly { s += Self.name(for: keyCode) }
+        // Modifier-only bindings always support both hold and double-tap-to-lock
+        // simultaneously, so the per-mode "(hold)" suffix doesn't apply.
+        if !isModifierOnly && mode == .holdToTalk { s += "  (hold)" }
         return s
     }
 

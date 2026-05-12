@@ -59,13 +59,24 @@ final class HotkeyModeMenuItemView: NSView {
     }
 
     private func refresh() {
-        switch AppState.shared.hotkey.mode {
-        case .tapToToggle: stateField.stringValue = "Tap to Toggle"
-        case .holdToTalk:  stateField.stringValue = "Hold to Talk"
+        let config = AppState.shared.hotkey
+        if config.isModifierOnly {
+            // Modifier-only bindings always have both hold AND double-tap-to-lock
+            // active — the per-mode toggle doesn't apply.
+            stateField.stringValue = "Hold + Double-tap"
+            stateField.textColor = .tertiaryLabelColor
+        } else {
+            stateField.textColor = .secondaryLabelColor
+            switch config.mode {
+            case .tapToToggle: stateField.stringValue = "Tap to Toggle"
+            case .holdToTalk:  stateField.stringValue = "Hold to Talk"
+            }
         }
     }
 
     override func mouseDown(with event: NSEvent) {
+        // Disabled for modifier-only bindings (mode toggle has no effect there).
+        guard !AppState.shared.hotkey.isModifierOnly else { return }
         var config = AppState.shared.hotkey
         config.mode = (config.mode == .tapToToggle) ? .holdToTalk : .tapToToggle
         AppState.shared.hotkey = config
