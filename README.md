@@ -47,7 +47,15 @@ HF_HUB_DISABLE_XET=1 huggingface-cli download FluidInference/parakeet-tdt-0.6b-v
 
 `dev-build.sh` does the full loop: builds Release with ad-hoc signing, replaces `/Applications/yaprflow.app`, strips Gatekeeper quarantine, and relaunches. ~3 min cold, ~30 s incremental.
 
-> **Need help?** Point [Claude Code](https://claude.com/claude-code) at this repo (or share the URL with a friend running it) — [CLAUDE.md](CLAUDE.md) at the project root has architecture notes, the rebuild loop, and the most common gotchas. Claude will walk you through setup automatically.
+### For Claude Code users (recommended for non-developers)
+
+If you have [Claude Code](https://claude.com/claude-code) — desktop app, CLI, or browser — you don't need to run any of the commands above by hand. Open Claude Code in a fresh directory and paste:
+
+> Please install yaprflow for me from this repo: `https://github.com/M1w234/yaprflow-mw.git`
+>
+> Read `CLAUDE.md` and `README.md` first. Clone the repo, install any missing prerequisites (Xcode, `huggingface_hub`, Metal Toolchain), download the speech model, and run `./scripts/dev-build.sh`. Walk me through the manual steps that need me to click something in System Settings (Microphone permission, Accessibility permission, hotkey binding).
+
+Claude Code reads [CLAUDE.md](CLAUDE.md) for all the project-specific gotchas (the broken upstream `fetch-models.sh`, the AX TCC reset after rebuilds, etc.) and will do the rest. The only things it can't automate are the macOS security prompts (you have to click "Allow") and installing Xcode itself from the App Store (~12 GB, requires Apple ID sign-in).
 
 ## Enabling Accessibility
 
