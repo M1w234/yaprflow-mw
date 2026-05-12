@@ -28,9 +28,29 @@ final class AutoPasteMenuItemView: NSView {
         cancellable = AppState.shared.$autoPasteMode
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }
+
+        // Auto-Paste's state depends on Accessibility permission, which lives
+        // outside the app's process — granting/revoking in System Settings
+        // emits no notification. Refreshing on every menu open re-evaluates
+        // `AXIsProcessTrusted()` so the label doesn't lie ("Needs Permission"
+        // when it's actually granted, or vice versa).
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onMenuWillOpen),
+            name: NSMenu.didBeginTrackingNotification,
+            object: nil
+        )
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func onMenuWillOpen() {
+        refresh()
+    }
 
     override var intrinsicContentSize: NSSize {
         NSSize(width: NSView.noIntrinsicMetric, height: 22)
