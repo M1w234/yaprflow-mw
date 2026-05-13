@@ -129,6 +129,17 @@ struct ClipboardHistoryView: View {
                         }
                     }
                 }
+                .onAppear {
+                    // LazyVStack realizes rows on demand, so SwiftUI's initial
+                    // scroll position is unpredictable — it sometimes lands at
+                    // the bottom of the realized content. Force the most-recent
+                    // entry (index 0) to the top of the viewport on each open.
+                    if let firstId = filteredEntries.first?.id {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(firstId, anchor: .top)
+                        }
+                    }
+                }
                 .onChange(of: selection) { _, newValue in
                     if let id = newValue {
                         withAnimation(.easeOut(duration: 0.12)) {
