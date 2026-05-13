@@ -4,25 +4,35 @@ import SwiftUI
 /// The SwiftUI body of the clipboard history window. Lives inside an
 /// `NSHostingController` hosted by `ClipboardHistoryWindowController`.
 ///
-/// **Keyboard model:**
-///   - `⏎` (Return) on the selected row → copy to pasteboard + dismiss
-///   - `↑` / `↓` → navigate rows
-///   - `⌘P` → toggle pin
-///   - `⌫` (Delete) → remove row
-///   - `Esc` → dismiss (handled by the window controller via `cancelOperation`)
+/// **Two activation modes:**
+///   - **Click** (or **Enter** on the selected row): copy + auto-paste into
+///     the app that was frontmost when the window opened.
+///   - **⌥-click** (or **⌥ Enter**): copy only — no auto-paste. Use when you
+///     want the text on the clipboard but plan to paste it elsewhere or
+///     manipulate it first.
 ///
-/// **Mouse model:** click a row to copy + dismiss; hover reveals pin/delete
-/// glyphs at the trailing edge. Right-click brings up the same actions plus
-/// "Reveal in JSON…" (skipped in v1 — not enough demand yet).
+/// **Keyboard:** `↑` `↓` navigate rows; `Esc` dismisses; right-click brings up
+/// pin / delete actions per row. Hover reveals a trash icon at the trailing
+/// edge as a mouse-friendly delete affordance.
+///
+/// Modifier detection is via `NSEvent.modifierFlags` at the moment the gesture
+/// fires — SwiftUI doesn't expose modifier state on `.onTapGesture` directly,
+/// and reading the class property is reliable on AppKit-backed platforms.
 struct ClipboardHistoryView: View {
     @ObservedObject private var store = ClipboardHistoryStore.shared
     @State private var searchText: String = ""
     @State private var selection: ClipboardHistoryEntry.ID?
     @FocusState private var searchFocused: Bool
 
-    /// Provided by the window controller so a row tap can dismiss us.
-    let onCopy: (ClipboardHistoryEntry) -> Void
+    /// Provided by the window controller. `copyOnly` is true when the user
+    /// held ⌥ during the activation; the controller then skips the auto-paste
+    /// step and just leaves the text on the clipboard.
+    let onActivate: (ClipboardHistoryEntry, Bool) -> Void
     let onClose: () -> Void
+
+    private static func optionDown() -> Bool {
+        NSEvent.modifierFlags.contains(.option)
+    }
 
     private var filteredEntries: [ClipboardHistoryEntry] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -35,6 +45,10 @@ struct ClipboardHistoryView: View {
             header
             Divider().opacity(0.6)
             content
+            if !store.entries.isEmpty {
+                Divider().opacity(0.4)
+                footer
+            }
         }
         .background(.ultraThinMaterial)
         .onAppear {
@@ -60,7 +74,7 @@ struct ClipboardHistoryView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .focused($searchFocused)
-                .onSubmit { activateSelection() }
+                .onSubmit { activateSelection(copyOnly: Self.optionDown()) }
                 .onKeyPress(.downArrow) {
                     moveSelection(by: +1)
                     return .handled
@@ -101,12 +115,14 @@ struct ClipboardHistoryView: View {
                             HistoryRow(
                                 entry: entry,
                                 isSelected: selection == entry.id,
-                                onCopy: { onCopy(entry) },
+                                onActivate: { copyOnly in onActivate(entry, copyOnly) },
                                 onTogglePin: { store.togglePin(entry) },
                                 onDelete: { store.delete(entry) }
                             )
                             .id(entry.id)
-                            .onTapGesture { onCopy(entry) }
+                            .onTapGesture {
+                                onActivate(entry, Self.optionDown())
+                            }
                             .onHover { hovering in
                                 if hovering { selection = entry.id }
                             }
@@ -122,6 +138,18 @@ struct ClipboardHistoryView: View {
                 }
             }
         }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 12) {
+            HintChip(key: "⏎", label: "Paste")
+            HintChip(key: "⌥⏎", label: "Copy only")
+            HintChip(key: "esc", label: "Close")
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.primary.opacity(0.03))
     }
 
     private var emptyState: some View {
@@ -153,18 +181,19 @@ struct ClipboardHistoryView: View {
         selection = items[nextIdx].id
     }
 
-    private func activateSelection() {
+    private func activateSelection(copyOnly: Bool) {
         guard let id = selection,
               let entry = filteredEntries.first(where: { $0.id == id })
         else { return }
-        onCopy(entry)
+        onActivate(entry, copyOnly)
     }
 }
 
 private struct HistoryRow: View {
     let entry: ClipboardHistoryEntry
     let isSelected: Bool
-    let onCopy: () -> Void
+    /// `copyOnly == false` → paste into previous app; `true` → just copy.
+    let onActivate: (Bool) -> Void
     let onTogglePin: () -> Void
     let onDelete: () -> Void
 
@@ -215,9 +244,10 @@ private struct HistoryRow: View {
             Divider().padding(.leading, 14).opacity(0.5)
         }
         .contextMenu {
-            Button("Copy") { onCopy() }
-            Button(entry.isPinned ? "Unpin" : "Pin") { onTogglePin() }
+            Button("Paste into Previous App") { onActivate(false) }
+            Button("Copy") { onActivate(true) }
             Divider()
+            Button(entry.isPinned ? "Unpin" : "Pin") { onTogglePin() }
             Button("Delete", role: .destructive) { onDelete() }
         }
     }
@@ -235,6 +265,26 @@ private struct HistoryRow: View {
             } else {
                 Color.clear
             }
+        }
+    }
+}
+
+/// Footer key-hint chip — small inline glyph + label pair used to surface
+/// the click/keyboard model so users don't have to read docs to find ⌥Enter.
+private struct HintChip: View {
+    let key: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(key)
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 3))
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
         }
     }
 }

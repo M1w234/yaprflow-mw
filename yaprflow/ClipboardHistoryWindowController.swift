@@ -14,6 +14,12 @@ import SwiftUI
 final class ClipboardHistoryWindowController: NSWindowController, NSWindowDelegate {
     static let shared = ClipboardHistoryWindowController()
 
+    /// Frontmost app at the moment `show()` was called. Snapshotted so that
+    /// when the user picks a row we can reactivate this app and synthesize
+    /// ⌘V into it — emulating the Paste / Wispr workflow where the chosen
+    /// snippet lands in the field the user was just typing in.
+    private var previousApp: NSRunningApplication?
+
     private convenience init() {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 580, height: 520),
@@ -41,8 +47,8 @@ final class ClipboardHistoryWindowController: NSWindowController, NSWindowDelega
         panel.delegate = self
 
         let root = ClipboardHistoryView(
-            onCopy: { [weak self] entry in
-                self?.copyAndClose(entry)
+            onActivate: { [weak self] entry, copyOnly in
+                self?.activate(entry, copyOnly: copyOnly)
             },
             onClose: { [weak self] in
                 self?.close()
@@ -69,6 +75,14 @@ final class ClipboardHistoryWindowController: NSWindowController, NSWindowDelega
 
     func show() {
         guard let win = window else { return }
+        // Snapshot frontmost app BEFORE ordering our panel forward, so we
+        // can reactivate it and synthesize ⌘V into it on row activation.
+        // Skip our own app — if yaprflow is already frontmost, there's no
+        // sensible "previous" app to paste into.
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp = front
+        }
         if !win.isVisible {
             centerOnActiveScreen()
         }
@@ -98,16 +112,30 @@ final class ClipboardHistoryWindowController: NSWindowController, NSWindowDelega
         win.setFrameOrigin(origin)
     }
 
-    /// Copy the entry's text, restore focus to the app that was active before
-    /// the history window appeared, and dismiss. Auto-paste into that app is
-    /// out of scope for v1 — TCC permission is reused but the focus-PID
-    /// snapshot is owned by `TranscriptionController`, not us. The user
-    /// presses ⌘V manually after the window closes.
-    private func copyAndClose(_ entry: ClipboardHistoryEntry) {
+    /// Picked a row. Always writes to the pasteboard and closes the window.
+    /// If `copyOnly` is false AND Accessibility is granted AND we're not in
+    /// Secure Event Input mode (password fields, sudo prompts, lock screen),
+    /// also reactivate the previously-frontmost app and synthesize ⌘V so
+    /// the snippet lands in the field the user was typing in.
+    ///
+    /// Why the short delay before paste: `app.activate()` returns immediately
+    /// but window-server focus changes asynchronously. Posting ⌘V too soon
+    /// hits us (or nothing) instead of the target app. ~60 ms is enough on
+    /// every machine I tested without being noticeable to the user.
+    private func activate(_ entry: ClipboardHistoryEntry, copyOnly: Bool) {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(entry.text, forType: .string)
         close()
+
+        guard !copyOnly else { return }
+        guard AutoPaste.hasAccessibility, !AutoPaste.isSecureInputEnabled else { return }
+        guard let target = previousApp else { return }
+
+        target.activate(options: [])
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(60)) {
+            AutoPaste.sendCmdV()
+        }
     }
 
     // MARK: - NSWindowDelegate
