@@ -1,8 +1,8 @@
 # yaprflow — Setup
 
 **yaprflow** is a privacy-first, on-device dictation app for macOS. Hold a
-hotkey, talk, and your words are transcribed and pasted — entirely locally,
-nothing sent to the cloud.
+hotkey, talk, and your words are transcribed and inserted into the field you
+were using — entirely locally, with nothing sent to the cloud.
 
 **Compatibility:** Apple-silicon Mac (M1 or newer) running macOS 14 Sonoma or
 later. This build does not run on Intel Macs.
@@ -48,27 +48,37 @@ This release is signed and notarized by Apple, so that message is not expected.
 Delete the download and get a fresh copy from the GitHub release. Do not bypass
 Gatekeeper for a file from another source.
 
-### 3. Grant Microphone access
-- The first time you start a recording, macOS asks → click **Allow**.
+### 3. Follow the first-run guide
+Yaprflow opens a short setup guide automatically. Keep the recommended defaults:
+
+- **Single-shot transcription** for the best accuracy
+- **Light cleanup** for instant cleanup without rephrasing
+- **Automatic Insertion** so dictation appears in the focused field without
+  replacing the clipboard
+
+The final screen shows the default shortcut and confirms setup is complete. You
+can reopen this guide later from the waveform menu → **Setup Guide…**.
+
+### 4. Grant Microphone access
+- The setup guide asks for Microphone access → click **Allow**.
 - Or manually: **System Settings → Privacy & Security → Microphone → turn on yaprflow.**
 
-### 4. Grant Accessibility access (required for the hotkey + auto-paste)
+### 5. Grant Accessibility access (required for the hotkey + Automatic Insertion)
 ```bash
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 ```
 - If **yaprflow** is listed, turn it **on**. If not, click **➕**, choose **Applications → yaprflow**, turn it on.
 - The hotkey comes alive within a few seconds — no restart needed.
 
-### 5. Use it
-- **Hold ⌥⇧ (Option+Shift) and talk**, then release → your words paste in.
+### 6. Use it
+- **Hold ⌥⇧ (Option+Shift) and talk**, then release → your words appear.
 - Or **double-tap ⌥⇧** to lock recording on; tap again to stop.
-- A first-launch welcome window covers a couple of options (streaming, grammar, auto-paste). Defaults are fine.
 
-### 6. Optional — use the Globe 🌐 key instead (MacBook laptops only)
+### 7. Optional — use the Globe 🌐 key instead (MacBook laptops only)
 
 **Agent: ask first — "Are you on a MacBook laptop, and would you rather use the 🌐 (Globe/Fn) key at the bottom-left as your dictation key instead of ⌥⇧?" If no, or they're on a desktop / external keyboard with no Globe key, SKIP this step — you're done.**
 
-If yes, free the Globe key from its default job first (on most Macs it opens the Emoji picker, which would fight the paste):
+If yes, free the Globe key from its default job first (on most Macs it opens the Emoji picker, which would conflict with the shortcut):
 
 1. Open Keyboard settings and set **"Press 🌐 key to" → "Do Nothing"** (applies immediately):
    ```bash
@@ -87,4 +97,6 @@ If yes, free the Globe key from its default job first (on most Macs it opens the
 - **App will not open on an Intel Mac:** this build requires Apple silicon (M1 or newer).
 - **No text / nothing transcribed:** check Microphone (Step 3). The very first recording after install can take ~30s while the model warms up (one-time).
 - **Is my voice going to the cloud?** No — transcription runs entirely on your Mac; the model is bundled in the app.
-- **Change settings/hotkey/sounds later:** open the menu (icon or the Spotlight trick) — shortcut, dictation mode, grammar, auto-paste, sounds, clipboard history (⌃⌥V), and personal vocabulary are all there.
+- **Change settings later:** open the menu (icon or the Spotlight trick) —
+  shortcut, trigger mode, Cleanup (Off/Light/Polish), Automatic Insertion,
+  sounds, History (⌃⌥V), and personal vocabulary are all there.

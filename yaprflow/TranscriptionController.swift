@@ -66,6 +66,12 @@ final class TranscriptionController {
     /// the ceiling stops-and-transcribes; nothing is discarded.
     private let maxSessionDuration: TimeInterval = 10 * 60
     private var maxDurationTask: Task<Void, Never>?
+    /// Keep the microphone live briefly after the stop gesture so a soft or
+    /// trailing final word reaches the app before the tap is removed.
+    private let captureTailGrace: Duration = .milliseconds(350)
+    /// Once the tap is removed, give already-enqueued MainActor feed tasks a
+    /// bounded chance to append their copied buffers before isActive flips.
+    private let captureDrainGrace: Duration = .milliseconds(40)
 
     /// Monotonic per-recording session ID. Bumped in start() before any await.
     /// Async work (notably the grammar correction Task that outlives stop())
@@ -152,6 +158,7 @@ final class TranscriptionController {
     /// app. Bound to Esc while recording.
     func cancel() {
         guard isActive else { return }
+        let cancelledSessionID = currentSessionID
         desiredActive = false
         isActive = false
         maxDurationTask?.cancel()
@@ -164,6 +171,7 @@ final class TranscriptionController {
         // Invalidate in-flight async work: chained transcribes check this
         // session ID before touching confirmedText, and any grammar Task
         // from a previous session already guards on it.
+        ComparisonLogger.shared.cancelSession(sessionID: cancelledSessionID)
         currentSessionID = UUID()
         sessionSamples.removeAll()
         vadPending.removeAll()
@@ -190,56 +198,43 @@ final class TranscriptionController {
         return pid == mine ? nil : pid
     }
 
-    /// Send the ⌘V if every guard passes; log + skip silently otherwise. The
-    /// transcript is already on the clipboard regardless, so a skipped paste
-    /// degrades to current (pre-feature) behaviour.
-    private func performAutoPasteIfAllowed(targetPID: pid_t?, enabled: Bool) {
-        guard enabled else { return }
-        guard let target = targetPID else {
-            log.info("Auto-paste skipped: no captured target (yaprflow was frontmost at start, or capture failed)")
-            return
-        }
-        guard AutoPaste.hasAccessibility else {
-            log.info("Auto-paste skipped: Accessibility permission not granted")
-            return
-        }
-        guard !AutoPaste.isSecureInputEnabled else {
-            log.info("Auto-paste skipped: secure event input is enabled (password field?)")
-            return
-        }
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == target else {
-            log.info("Auto-paste skipped: focus changed since recording started")
-            return
-        }
-        AutoPaste.sendCmdV()
-    }
-
-    /// Final delivery of a transcript to the user. Preserve-clipboard mode
-    /// (with auto-paste on) tries direct insertion first and only touches
-    /// the clipboard as a last resort; otherwise classic clipboard write +
-    /// optional ⌘V. `updateStatus: false` keeps a caller-set status (e.g.
-    /// the grammar-failure error) visible instead of overwriting it.
+    /// Final delivery of a transcript to the user. Automatic insertion never
+    /// touches the clipboard: if the target or Accessibility permission is
+    /// unavailable, the transcript remains recoverable in History and the
+    /// overlay reports the failure. With automatic insertion disabled, the
+    /// transcript is copied for manual paste. `updateStatus: false` keeps a
+    /// caller-set status (e.g. the grammar-failure error) visible.
     private func deliverTranscript(
         _ text: String,
+        sessionID: UUID,
         targetPID: pid_t?,
         autoPasteEnabled: Bool,
-        preserveClipboard: Bool,
+        shadowComparisonEnabled: Bool,
         updateStatus: Bool = true
     ) {
-        ComparisonLogger.shared.recordDelivered(text)
-        if autoPasteEnabled, preserveClipboard {
+        ComparisonLogger.shared.recordDelivered(sessionID: sessionID, text: text)
+        if shadowComparisonEnabled {
+            if updateStatus { state.status = .captured }
+            log.info("Shadow comparison captured transcript without delivery")
+            return
+        }
+        if autoPasteEnabled {
             if insertDirectly(text, targetPID: targetPID) {
                 if updateStatus { state.status = .inserted }
                 return
             }
-            log.info("Preserve-clipboard insertion unavailable — falling back to clipboard")
+            log.info("Automatic insertion unavailable — transcript retained in History")
+            if updateStatus {
+                state.status = .error("Couldn't insert — saved to History")
+            }
+            return
         }
         let pb = NSPasteboard.general
         pb.clearContents()
         let writeOK = pb.setString(text, forType: .string)
         if updateStatus { state.status = .copied }
-        if writeOK {
-            performAutoPasteIfAllowed(targetPID: targetPID, enabled: autoPasteEnabled)
+        if !writeOK {
+            log.error("Failed to copy transcript to clipboard")
         }
     }
 
@@ -340,12 +335,15 @@ final class TranscriptionController {
         // the hotkey," not "wherever they happen to be after the model loads."
         currentSessionID = UUID()
         sessionFrontmostPID = Self.captureFrontmostExcludingSelf()
+        ComparisonLogger.shared.prepareSession(sessionID: currentSessionID)
 
         // Fire screen-context capture in parallel. Off-main, fire-and-forget;
         // the polish path reads whatever has landed by then. If the user
         // disabled the feature, clear any stale capture from a prior session
         // so it can't be picked up if they re-enable mid-session.
-        if state.screenContextMode, let targetPID = sessionFrontmostPID {
+        if state.cleanupMode == .polish,
+           state.screenContextMode,
+           let targetPID = sessionFrontmostPID {
             let appName = NSWorkspace.shared.frontmostApplication?.localizedName
             screenContextStore.startCapture(
                 sessionID: currentSessionID,
@@ -379,6 +377,7 @@ final class TranscriptionController {
             state.status = .listening
             try capture.start()
             isActive = true
+            ComparisonLogger.shared.recordingDidStart(sessionID: currentSessionID)
             SoundEffect.start.play()
 
             // Session-scoped affordances — all torn down in stop()/cancel().
@@ -426,10 +425,29 @@ final class TranscriptionController {
 
     private func stop() async {
         guard isActive else { return }
-        isActive = false
         maxDurationTask?.cancel()
-        CancelHotkey.shared.unregister()
+        ComparisonLogger.shared.recordingDidStop(sessionID: currentSessionID)
+
+        // Show immediate feedback while keeping capture live for a short
+        // post-roll. This recovers softly trailed endings without running any
+        // additional model or slowing the transcription itself.
+        state.status = .finishing
+        try? await Task.sleep(for: captureTailGrace)
+
+        // Esc can cancel and clear the session while the post-roll suspends.
+        // Do not resurrect or deliver a cancelled dictation when we resume.
+        guard isActive else { return }
+
         capture.stop()
+
+        // AudioCapture copies each render-thread buffer before handing it to a
+        // MainActor task. After removing the tap, allow that finite queue to
+        // drain while feed() still sees isActive == true.
+        try? await Task.sleep(for: captureDrainGrace)
+        guard isActive else { return }
+
+        isActive = false
+        CancelHotkey.shared.unregister()
         AudioDucking.shared.restore()
         // No-op for chord-initiated stops (the recognizer already reset
         // itself before firing onStop); resyncs it after max-duration or
@@ -438,7 +456,6 @@ final class TranscriptionController {
         ModifierOnlyHotkey.shared.notifyRecordingEndedExternally()
         SoundEffect.stop.play()
         state.inputLevel = 0
-        state.status = .finishing
 
         if sessionIsStreaming {
             // Streaming: flush any pending speech segment so we don't lose the
@@ -469,9 +486,12 @@ final class TranscriptionController {
         if !finalText.isEmpty {
             state.lastOriginalTranscript = finalText
             // Comparison study (no-op unless the menu toggle is on): log our
-            // raw transcript and start watching the clipboard for the other
-            // engine's output.
-            ComparisonLogger.shared.beginCapture(raw: finalText)
+            // raw transcript. Wispr's side is paired later from its richer
+            // local History table, independent of the destination app.
+            ComparisonLogger.shared.beginCapture(
+                sessionID: currentSessionID,
+                raw: finalText
+            )
 
             // Snapshot session-scoped values for any async work below — never
             // read `self.currentSessionID` / `self.sessionFrontmostPID` from
@@ -480,18 +500,19 @@ final class TranscriptionController {
             let sessionID = currentSessionID
             let targetPID = sessionFrontmostPID
             let autoPasteEnabled = state.autoPasteMode
+            let shadowComparisonEnabled = state.comparisonLogMode
             let screenContextEnabled = state.screenContextMode
-            let preserveClipboard = state.preserveClipboardMode
 
-            if state.grammarMode {
-                // Grammar mode: put the original on the clipboard first so
+            switch state.cleanupMode {
+            case .polish:
+                // Manual-copy mode: put the original on the clipboard first so
                 // the user has SOMETHING while correction runs; the final
-                // delivery below overwrites it. Skipped in preserve-clipboard
-                // mode, whose whole point is not touching the clipboard. The
+                // delivery below overwrites it. Skipped for automatic insertion,
+                // whose whole point is not touching the clipboard. The
                 // original write is never auto-pasted — auto-paste/insertion
                 // only fires on the final value (corrected on success, or
                 // original on failure below).
-                if !(autoPasteEnabled && preserveClipboard) {
+                if !autoPasteEnabled && !shadowComparisonEnabled {
                     let pb = NSPasteboard.general
                     pb.clearContents()
                     pb.setString(finalText, forType: .string)
@@ -536,9 +557,10 @@ final class TranscriptionController {
                         self.state.lastTranscript = corrected
                         self.deliverTranscript(
                             corrected,
+                            sessionID: sessionID,
                             targetPID: targetPID,
                             autoPasteEnabled: autoPasteEnabled,
-                            preserveClipboard: preserveClipboard
+                            shadowComparisonEnabled: shadowComparisonEnabled
                         )
                         // Deliver → retract. No completion ceremony; the pill
                         // pulls away as soon as the text has landed.
@@ -562,23 +584,38 @@ final class TranscriptionController {
                         // the error above stays visible.
                         self.deliverTranscript(
                             finalText,
+                            sessionID: sessionID,
                             targetPID: targetPID,
                             autoPasteEnabled: autoPasteEnabled,
-                            preserveClipboard: preserveClipboard,
+                            shadowComparisonEnabled: shadowComparisonEnabled,
                             updateStatus: false
                         )
                     }
                 }
-            } else {
-                // Regular mode: deliver directly.
+            case .light:
+                // Light mode is synchronous and deterministic: no model load,
+                // no paraphrasing, and no async correction latency.
+                let cleaned = LightCleanup.apply(finalText)
+                state.liveTranscript = cleaned
+                state.lastTranscript = cleaned
+                deliverTranscript(
+                    cleaned,
+                    sessionID: sessionID,
+                    targetPID: targetPID,
+                    autoPasteEnabled: autoPasteEnabled,
+                    shadowComparisonEnabled: shadowComparisonEnabled
+                )
+                scheduleAutoHide(after: 0.3)
+
+            case .off:
                 state.lastTranscript = finalText
                 deliverTranscript(
                     finalText,
+                    sessionID: sessionID,
                     targetPID: targetPID,
                     autoPasteEnabled: autoPasteEnabled,
-                    preserveClipboard: preserveClipboard
+                    shadowComparisonEnabled: shadowComparisonEnabled
                 )
-                // Deliver → retract, no lingering.
                 scheduleAutoHide(after: 0.3)
             }
         } else {

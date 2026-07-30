@@ -128,29 +128,31 @@ final class ClipboardHistoryWindowController: NSWindowController, NSWindowDelega
         win.setFrameOrigin(origin)
     }
 
-    /// Picked a row. Always writes to the pasteboard and closes the window.
-    /// If `copyOnly` is false AND Accessibility is granted AND we're not in
-    /// Secure Event Input mode (password fields, sudo prompts, lock screen),
-    /// also reactivate the previously-frontmost app and synthesize ⌘V so
-    /// the snippet lands in the field the user was typing in.
+    /// Picked a row. Copy is an explicit clipboard action. Paste into Previous
+    /// App instead uses the same clipboard-free insertion path as dictation.
     ///
-    /// Why the short delay before paste: `app.activate()` returns immediately
-    /// but window-server focus changes asynchronously. Posting ⌘V too soon
-    /// hits us (or nothing) instead of the target app. ~60 ms is enough on
-    /// every machine I tested without being noticeable to the user.
+    /// Why the short delay before insertion: `app.activate()` returns
+    /// immediately but window-server focus changes asynchronously. Inserting
+    /// too soon hits us (or nothing) instead of the target app.
     private func activate(_ entry: ClipboardHistoryEntry, copyOnly: Bool) {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(entry.text, forType: .string)
+        if copyOnly {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(entry.text, forType: .string)
+            close()
+            return
+        }
+
         close()
 
-        guard !copyOnly else { return }
         guard AutoPaste.hasAccessibility, !AutoPaste.isSecureInputEnabled else { return }
         guard let target = previousApp else { return }
 
         target.activate(options: [])
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(60)) {
-            AutoPaste.sendCmdV()
+            if !TextInsertion.insert(entry.text, intoPID: target.processIdentifier) {
+                AppState.shared.status = .error("Couldn't insert — item remains in History")
+            }
         }
     }
 

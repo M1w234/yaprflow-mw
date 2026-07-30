@@ -18,10 +18,10 @@ private let log = Logger(subsystem: "com.teamwong.yaprflow", category: "TextInse
 ///      everywhere text input works, at the cost of being a stream of key
 ///      events rather than one atomic operation.
 ///
-/// Caller is responsible for the same guards as auto-paste: Accessibility
+/// Caller is responsible for the insertion guards: Accessibility
 /// granted, secure input off, focus still on the intended target PID.
-/// Returns false if neither mechanism worked — caller falls back to the
-/// clipboard so the transcript is never lost.
+/// Returns false if neither mechanism worked. The caller keeps the transcript
+/// in History and reports the failure without changing the clipboard.
 @MainActor
 enum TextInsertion {
     static func insert(_ text: String, intoPID pid: pid_t) -> Bool {
@@ -65,9 +65,8 @@ enum TextInsertion {
     }
 
     private static func typeUnicode(_ text: String) -> Bool {
-        // .privateState for the same reason as AutoPaste.sendCmdV: don't let
-        // physical modifier state (a just-released hotkey chord) bleed into
-        // the synthesized events.
+        // .privateState keeps physical modifier state (for example, a
+        // just-released hold-to-talk chord) out of the synthesized events.
         guard let source = CGEventSource(stateID: .privateState) else { return false }
 
         let utf16 = Array(text.utf16)

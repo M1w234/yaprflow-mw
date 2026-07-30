@@ -241,10 +241,11 @@ enum GrammarError: LocalizedError {
 @MainActor
 final class GrammarController {
     static let shared = GrammarController()
+    static let correctionModelID = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+    static let correctionPromptVersion = "minimal-copyedit-v1"
 
     private let modelURL = URL(string: "https://github.com/tmoreton/yaprflow/releases/download/v0.1.0-grammar-model/qwen25-1.5b-4bit-mlx.tar.gz")!
     private let modelDirName = "grammar-model-qwen25-1.5b"
-    private let modelID = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
 
     private var modelContainer: ModelContainer?
     private var idleReleaseTask: Task<Void, Never>?
@@ -350,8 +351,10 @@ final class GrammarController {
         // the small model tends to scramble them ("There you go." → "Go
         // there."). Also saves a model load + inference on one-liners.
         if Self.isTooShortToPolish(text) { return text }
+        try Task.checkCancellation()
 
         let container = try await ensureLoaded(progress: progress)
+        try Task.checkCancellation()
 
         let userJSON = try encodeUserMessage(transcript: text)
         let chat: [Chat.Message] = [.system(systemPrompt), .user(userJSON)]
@@ -362,6 +365,7 @@ final class GrammarController {
 
         var raw = ""
         for await generation in stream {
+            try Task.checkCancellation()
             if case .chunk(let string) = generation { raw += string }
         }
 
@@ -380,6 +384,7 @@ final class GrammarController {
         progress: @escaping @MainActor (String) -> Void
     ) async throws -> String {
         if Self.isTooShortToPolish(text) { return text }
+        try Task.checkCancellation()
 
         guard let ctx = context, Self.hasUsableText(ctx) else {
             return try await correct(text: text, progress: progress)
@@ -398,6 +403,7 @@ final class GrammarController {
         }
 
         let container = try await ensureLoaded(progress: progress)
+        try Task.checkCancellation()
 
         let userJSON: String
         do {
@@ -415,6 +421,7 @@ final class GrammarController {
 
         var raw = ""
         for await generation in stream {
+            try Task.checkCancellation()
             if case .chunk(let string) = generation { raw += string }
         }
 
@@ -565,30 +572,6 @@ final class GrammarController {
         wordCount(text) < minWordsToPolish
     }
 
-    /// Word-level similarity (1 − normalized token edit distance). A genuine
-    /// grammar edit keeps almost all of the original words in order and scores
-    /// high; a rewrite, an answered request, or an invented completion scores
-    /// low. This is the structural backstop the prompt alone can't provide.
-    private static func tokenSimilarity(_ a: String, _ b: String) -> Double {
-        let ta = a.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
-        let tb = b.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
-        if ta.isEmpty && tb.isEmpty { return 1 }
-        if ta.isEmpty || tb.isEmpty { return 0 }
-        // Levenshtein on token arrays.
-        var prev = Array(0...tb.count)
-        var cur = [Int](repeating: 0, count: tb.count + 1)
-        for i in 1...ta.count {
-            cur[0] = i
-            for j in 1...tb.count {
-                let cost = ta[i - 1] == tb[j - 1] ? 0 : 1
-                cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
-            }
-            swap(&prev, &cur)
-        }
-        let dist = prev[tb.count]
-        return 1.0 - Double(dist) / Double(max(ta.count, tb.count))
-    }
-
     /// Below this raw↔polished token similarity, treat the output as a rewrite
     /// and keep the faithful transcript instead. Tuned from the comparison-log
     /// study: real edits sat well above ~0.7; the rewrites/answered-requests
@@ -608,7 +591,7 @@ final class GrammarController {
         if candidateCount > expansionLimit { return false }
 
         // Structural rewrite guard — the big one from the study.
-        if tokenSimilarity(candidate, originalTrimmed) < minCorrectionSimilarity {
+        if TextSimilarity.tokenSimilarity(candidate, originalTrimmed) < minCorrectionSimilarity {
             log.info("Grammar correction rejected: diverges too far from transcript (rewrite/answered request); kept original")
             return false
         }
