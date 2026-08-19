@@ -141,7 +141,7 @@ struct VocabularyView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Learn from corrections")
                     .font(.system(size: 13, weight: .medium))
-                Text("After direct insertion, briefly watch that inserted range and small boundary checks. Only a distinctive corrected name or term is saved; secure fields and broad rewrites are ignored.")
+                Text("After direct insertion, briefly watch that inserted range and small boundary checks. A distinctive corrected name or term prompts you before it is saved; secure fields and broad rewrites are ignored.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

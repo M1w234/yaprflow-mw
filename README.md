@@ -26,8 +26,9 @@ A personal fork of [tmoreton/yaprflow](https://github.com/tmoreton/yaprflow) wit
   on-device MLX model for stronger punctuation and grammar edits.
 - 📖 **Personal corrections** — teach names and recurring mis-hearings from a
   searchable Vocabulary window or directly from History. Optional same-field
-  learning notices a distinctive name you correct after automatic insertion;
-  it runs locally and ignores broad rewrites and secure fields.
+  learning notices a distinctive name you correct after automatic insertion,
+  then asks you to confirm, edit, or dismiss the suggestion. It runs locally
+  and ignores broad rewrites and secure fields.
 - 📝 **Summarize** — condense any transcript on demand (inherited from upstream).
 
 ## Install
@@ -82,7 +83,8 @@ and applied to future final transcripts.
 **Learn from corrections** is optional and requires Automatic Insertion. When
 enabled, Yaprflow briefly watches the range it just inserted, plus small
 in-memory boundary checks. If you correct one distinctive name or term in that
-same field, Yaprflow saves the localized replacement. It does not install a
+same field, Yaprflow asks you to confirm or edit the localized replacement
+before saving it. It does not install a
 global keyboard monitor, persist surrounding document text, learn from secure
 fields, or turn broad sentence rewrites into global rules.
 

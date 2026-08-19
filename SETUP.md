@@ -78,7 +78,8 @@ To teach a name or recurring mistake, open the waveform menu →
 **Vocabulary…** and enter the preferred spelling plus what Yaprflow heard. You
 can also open **History…**, right-click a transcript, and choose
 **Correct & Learn…**. Optional **Learn from corrections** works with Automatic
-Insertion and learns distinctive same-field edits locally; it is off by default.
+Insertion and offers to learn distinctive same-field edits locally; confirm,
+edit, or dismiss each suggestion. It is off by default.
 
 ### 7. Optional — use the Globe 🌐 key instead (MacBook laptops only)
 

@@ -8,7 +8,8 @@ private let log = Logger(subsystem: "com.teamwong.yaprflow", category: "Correcti
 /// Short-lived, opt-in observation of the exact text range Yaprflow inserted.
 /// It never installs a keyboard tap. Small prefix/suffix anchors are retained
 /// in memory for at most this observation window to prove that edits stayed
-/// inside the inserted range; only a validated short replacement is persisted.
+/// inside the inserted range. A validated short replacement is presented for
+/// confirmation and is persisted only after the user chooses Learn.
 @MainActor
 final class CorrectionLearningMonitor {
     static let shared = CorrectionLearningMonitor()
@@ -64,14 +65,9 @@ final class CorrectionLearningMonitor {
                         log.info("Ignored ambiguous automatic correction")
                         return
                     }
-                    _ = try VocabularyStore.shared.learn(
-                        misheard: candidate.misheard,
-                        replacement: candidate.replacement,
-                        source: .automatic
-                    )
-                    showLearnedFeedback(candidate)
+                    presentSuggestion(candidate)
                 } catch {
-                    log.info("Automatic correction not learned: \(error.localizedDescription, privacy: .public)")
+                    log.info("Automatic correction not suggested: \(error.localizedDescription, privacy: .public)")
                 }
                 return
             }
@@ -81,6 +77,7 @@ final class CorrectionLearningMonitor {
     func cancel() {
         task?.cancel()
         task = nil
+        CorrectionLearningConfirmationController.shared.dismiss()
     }
 
     private func focusedElementMatches(_ receipt: TextInsertionReceipt) -> Bool {
@@ -157,6 +154,25 @@ final class CorrectionLearningMonitor {
         if let string = ref as? String { return string }
         if let string = ref as? NSAttributedString { return string.string }
         return nil
+    }
+
+    private func presentSuggestion(_ candidate: CorrectionCandidate) {
+        CorrectionLearningConfirmationController.shared.show(candidate: candidate) {
+            [weak self] approved in
+            guard let self else { return nil }
+            do {
+                _ = try VocabularyStore.shared.learn(
+                    misheard: approved.misheard,
+                    replacement: approved.replacement,
+                    source: .automatic
+                )
+                showLearnedFeedback(approved)
+                return nil
+            } catch {
+                log.info("Confirmed correction not learned: \(error.localizedDescription, privacy: .public)")
+                return error.localizedDescription
+            }
+        }
     }
 
     private func showLearnedFeedback(_ candidate: CorrectionCandidate) {

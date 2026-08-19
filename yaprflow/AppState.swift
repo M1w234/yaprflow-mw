@@ -144,9 +144,10 @@ final class AppState: ObservableObject {
 
     /// Opt-in observation of the text range Yaprflow just inserted, plus small
     /// in-memory boundary anchors that prevent edits elsewhere from learning.
-    /// When a distinctive name/term is corrected in-place, the localized
-    /// replacement is added to the personal vocabulary. No global keystrokes
-    /// or surrounding document text are persisted.
+    /// When a distinctive name/term is corrected in-place, Yaprflow asks the
+    /// user to confirm or edit the localized replacement before saving it to
+    /// personal vocabulary. No global keystrokes or surrounding document text
+    /// are persisted.
     @Published var learnFromCorrections: Bool {
         didSet {
             UserDefaults.standard.set(
