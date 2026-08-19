@@ -258,7 +258,13 @@ final class TranscriptionController {
             log.info("Insertion skipped: focus changed since recording started")
             return false
         }
-        return TextInsertion.insert(text, intoPID: target)
+        guard let result = TextInsertion.insertWithResult(text, intoPID: target) else {
+            return false
+        }
+        if state.learnFromCorrections, let receipt = result.receipt {
+            CorrectionLearningMonitor.shared.begin(receipt)
+        }
+        return true
     }
 
     /// Drive recording from desired state. Safe to call rapidly from push-to-talk:
@@ -314,6 +320,8 @@ final class TranscriptionController {
 
     private func start() async {
         guard !isActive, !isStarting else { return }
+        // A new dictation ends the previous insertion's correction window.
+        CorrectionLearningMonitor.shared.cancel()
         isStarting = true
         defer { isStarting = false }
 

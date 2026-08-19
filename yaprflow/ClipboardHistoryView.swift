@@ -25,6 +25,10 @@ struct ClipboardHistoryView: View {
     @State private var timeFilter: TimeFilter = .all
     @State private var pinnedOnly: Bool = false
     @State private var collapsedSections: Set<String> = []
+    @State private var learningEntryID: ClipboardHistoryEntry.ID?
+    @State private var correctedDraft: String = ""
+    @State private var learningError: String?
+    @State private var learningConfirmation: String?
     @FocusState private var searchFocused: Bool
 
     enum TimeFilter: String, CaseIterable, Identifiable {
@@ -175,9 +179,23 @@ struct ClipboardHistoryView: View {
                                             isSelected: selection == entry.id,
                                             onActivate: { copyOnly in onActivate(entry, copyOnly) },
                                             onTogglePin: { store.togglePin(entry) },
-                                            onDelete: { store.delete(entry) }
+                                            onDelete: {
+                                                if learningEntryID == entry.id { cancelLearning() }
+                                                store.delete(entry)
+                                            },
+                                            onLearn: { beginLearning(entry) }
                                         )
                                         .id(entry.id)
+                                        if learningEntryID == entry.id {
+                                            HistoryCorrectionEditor(
+                                                original: entry.text,
+                                                corrected: $correctedDraft,
+                                                errorMessage: learningError,
+                                                confirmation: learningConfirmation,
+                                                onSave: { saveLearning(from: entry) },
+                                                onCancel: cancelLearning
+                                            )
+                                        }
                                     }
                                 }
                             } header: {
@@ -335,10 +353,50 @@ struct ClipboardHistoryView: View {
     }
 
     private func activateSelection(copyOnly: Bool) {
+        guard learningEntryID == nil else { return }
         guard let id = selection,
               let entry = orderedEntries.first(where: { $0.id == id })
         else { return }
         onActivate(entry, copyOnly)
+    }
+
+    private func beginLearning(_ entry: ClipboardHistoryEntry) {
+        selection = entry.id
+        learningEntryID = entry.id
+        correctedDraft = entry.text
+        learningError = nil
+        learningConfirmation = nil
+    }
+
+    private func cancelLearning() {
+        learningEntryID = nil
+        correctedDraft = ""
+        learningError = nil
+        learningConfirmation = nil
+    }
+
+    private func saveLearning(from entry: ClipboardHistoryEntry) {
+        do {
+            let candidate = try CorrectionInference.infer(
+                original: entry.text,
+                corrected: correctedDraft
+            )
+            _ = try VocabularyStore.shared.learn(
+                misheard: candidate.misheard,
+                replacement: candidate.replacement,
+                source: .history
+            )
+            learningError = nil
+            learningConfirmation = "Learned \(candidate.misheard) -> \(candidate.replacement)"
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.4))
+                guard learningEntryID == entry.id else { return }
+                cancelLearning()
+            }
+        } catch {
+            learningConfirmation = nil
+            learningError = error.localizedDescription
+        }
     }
 }
 
@@ -449,6 +507,7 @@ private struct HistoryRow: View {
     let onActivate: (Bool) -> Void
     let onTogglePin: () -> Void
     let onDelete: () -> Void
+    let onLearn: () -> Void
 
     @State private var isHovered = false
 
@@ -505,6 +564,7 @@ private struct HistoryRow: View {
         .contextMenu {
             Button("Paste into Previous App") { onActivate(false) }
             Button("Copy") { onActivate(true) }
+            Button("Correct & Learn…", action: onLearn)
             Divider()
             Button(entry.isPinned ? "Unpin" : "Pin") { onTogglePin() }
             Button("Delete", role: .destructive) { onDelete() }
@@ -525,6 +585,62 @@ private struct HistoryRow: View {
                 Color.clear
             }
         }
+    }
+}
+
+private struct HistoryCorrectionEditor: View {
+    let original: String
+    @Binding var corrected: String
+    let errorMessage: String?
+    let confirmation: String?
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    @FocusState private var editorFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Correct one name or short phrase", systemImage: "character.cursor.ibeam")
+                    .font(.system(size: 11.5, weight: .semibold))
+                Spacer()
+                Text("Original stays in History")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.tertiary)
+            }
+            TextEditor(text: $corrected)
+                .font(.system(size: 12.5))
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .frame(minHeight: 64, maxHeight: 96)
+                .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
+                .focused($editorFocused)
+            HStack {
+                if let confirmation {
+                    Label(confirmation, systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(.green)
+                } else if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                } else {
+                    Text("Only the changed phrase becomes a reusable rule.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("Learn", action: onSave)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(corrected == original || corrected.isEmpty)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .background(Color.accentColor.opacity(0.07))
+        .onAppear { editorFocused = true }
     }
 }
 

@@ -36,7 +36,7 @@ struct NotchOverlayView: View {
     /// errors) as opposed to live transcript text.
     private var isStatusMessage: Bool {
         switch state.status {
-        case .preparing, .correcting, .summarizing, .error: return true
+        case .preparing, .correcting, .summarizing, .learned, .error: return true
         default: return false
         }
     }
@@ -151,7 +151,7 @@ struct NotchOverlayView: View {
             ProgressView()
                 .controlSize(.small)
                 .tint(.white)
-        case .copied, .inserted, .captured:
+        case .copied, .inserted, .captured, .learned:
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
                 .font(.system(size: 16, weight: .semibold))
@@ -186,6 +186,7 @@ struct NotchOverlayView: View {
             // No completion ceremony — the pill retracts immediately, so
             // showing the full text (or a label) here is dead weight.
             return ""
+        case .learned(let message):       return message
         case .error(let message):         return message
         }
     }

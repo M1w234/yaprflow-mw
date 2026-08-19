@@ -27,6 +27,8 @@ enum TranscriptionStatus: Equatable {
     case inserted
     /// Recorded for comparison without inserting or changing the clipboard.
     case captured
+    /// A distinctive in-place correction was added to the vocabulary.
+    case learned(String)
     case error(String)
 }
 
@@ -43,6 +45,7 @@ final class AppState: ObservableObject {
     private static let preserveClipboardModeKey = "yaprflow.preserveClipboardMode"
     private static let duckWhileRecordingKey = "yaprflow.duckWhileRecording"
     private static let comparisonLogModeKey = "yaprflow.comparisonLogMode"
+    private static let learnFromCorrectionsKey = "yaprflow.learnFromCorrections"
     private static let keyboardShortcutEnabledKey = "yaprflow.keyboardShortcutEnabled"
     private static let bothKeyboardSidesKey = "yaprflow.bothKeyboardSides"
     private static let soundEffectsEnabledKey = "yaprflow.soundEffectsEnabled"
@@ -136,6 +139,23 @@ final class AppState: ObservableObject {
     @Published var comparisonLogMode: Bool {
         didSet {
             UserDefaults.standard.set(comparisonLogMode, forKey: Self.comparisonLogModeKey)
+        }
+    }
+
+    /// Opt-in observation of the text range Yaprflow just inserted, plus small
+    /// in-memory boundary anchors that prevent edits elsewhere from learning.
+    /// When a distinctive name/term is corrected in-place, the localized
+    /// replacement is added to the personal vocabulary. No global keystrokes
+    /// or surrounding document text are persisted.
+    @Published var learnFromCorrections: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                learnFromCorrections,
+                forKey: Self.learnFromCorrectionsKey
+            )
+            if !learnFromCorrections {
+                CorrectionLearningMonitor.shared.cancel()
+            }
         }
     }
 
@@ -252,6 +272,11 @@ final class AppState: ObservableObject {
             self.comparisonLogMode = stored
         } else {
             self.comparisonLogMode = false
+        }
+        if let stored = UserDefaults.standard.object(forKey: Self.learnFromCorrectionsKey) as? Bool {
+            self.learnFromCorrections = stored
+        } else {
+            self.learnFromCorrections = false
         }
         if let stored = UserDefaults.standard.object(forKey: Self.bothKeyboardSidesKey) as? Bool {
             self.bothKeyboardSides = stored

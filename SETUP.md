@@ -74,6 +74,12 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibil
 - **Hold ⌥⇧ (Option+Shift) and talk**, then release → your words appear.
 - Or **double-tap ⌥⇧** to lock recording on; tap again to stop.
 
+To teach a name or recurring mistake, open the waveform menu →
+**Vocabulary…** and enter the preferred spelling plus what Yaprflow heard. You
+can also open **History…**, right-click a transcript, and choose
+**Correct & Learn…**. Optional **Learn from corrections** works with Automatic
+Insertion and learns distinctive same-field edits locally; it is off by default.
+
 ### 7. Optional — use the Globe 🌐 key instead (MacBook laptops only)
 
 **Agent: ask first — "Are you on a MacBook laptop, and would you rather use the 🌐 (Globe/Fn) key at the bottom-left as your dictation key instead of ⌥⇧?" If no, or they're on a desktop / external keyboard with no Globe key, SKIP this step — you're done.**

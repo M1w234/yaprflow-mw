@@ -75,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         ExternalHotkey.shared.unregister()
         HistoryHotkey.shared.unregister()
         CancelHotkey.shared.unregister()
+        CorrectionLearningMonitor.shared.cancel()
         // Never leave the system muted behind us if we quit mid-recording.
         AudioDucking.shared.restore()
         // History saves are debounced 300 ms — flush so a dictation finished
@@ -98,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @objc private func openVocabulary() {
-        VocabularyStore.shared.openInEditor()
+        VocabularyWindowController.shared.show()
     }
 
     @objc private func showSetup() {
@@ -270,8 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         )
         menu.addItem(historyItem)
 
-        // Personal dictionary — opens vocabulary.json in the default editor.
-        // Edits are picked up automatically at the next dictation.
+        // Personal dictionary and learned correction manager.
         let vocabularyItem = NSMenuItem()
         vocabularyItem.view = IconActionMenuItemView(
             symbolName: "character.book.closed",
@@ -279,7 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             target: self,
             action: #selector(openVocabulary)
         )
-        vocabularyItem.toolTip = "Teach yaprflow your words. Each entry has a preferred spelling plus the phrases the transcriber keeps mis-hearing; matches are corrected automatically and the spellings are hinted to the grammar polish."
+        vocabularyItem.toolTip = "Add names and recurring mis-hearings, review learned corrections, or enable private same-field correction learning."
         menu.addItem(vocabularyItem)
 
         menu.addItem(NSMenuItem.separator())
