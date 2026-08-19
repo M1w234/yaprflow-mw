@@ -53,8 +53,12 @@ enum TextInsertion {
             return TextInsertionResult(receipt: axResult.receipt)
         }
         if typeUnicode(text) {
-            log.info("Inserted \(text.count, privacy: .public) chars via synthetic typing")
-            return TextInsertionResult(receipt: nil)
+            if axResult.receipt != nil {
+                log.info("Inserted \(text.count, privacy: .public) chars via synthetic typing; correction monitoring available")
+            } else {
+                log.info("Inserted \(text.count, privacy: .public) chars via synthetic typing; correction monitoring unavailable for this field")
+            }
+            return TextInsertionResult(receipt: axResult.receipt)
         }
         log.info("Direct insertion failed — caller should fall back to clipboard")
         return nil
@@ -78,18 +82,24 @@ enum TextInsertion {
         let element = ref as! AXUIElement
         AXUIElementSetMessagingTimeout(element, 0.3)
 
+        // Capture a read-only receipt before checking whether AX can perform
+        // the insertion. Electron/web fields often expose their selection and
+        // ranged text but do not allow kAXSelectedText to be set. Those fields
+        // fall back to synthetic Unicode typing, and the same receipt can still
+        // safely observe the exact range afterward for correction suggestions.
+        let receipt = makeReceipt(text: text, pid: pid, element: element)
+
         var settable = DarwinBoolean(false)
         guard AXUIElementIsAttributeSettable(
             element, kAXSelectedTextAttribute as CFString, &settable
         ) == .success, settable.boolValue else {
-            return (false, nil)
+            return (false, receipt)
         }
 
-        let receipt = makeReceipt(text: text, pid: pid, element: element)
         let succeeded = AXUIElementSetAttributeValue(
             element, kAXSelectedTextAttribute as CFString, text as CFString
         ) == .success
-        return (succeeded, succeeded ? receipt : nil)
+        return (succeeded, receipt)
     }
 
     private static func makeReceipt(

@@ -86,7 +86,9 @@ in-memory boundary checks. If you correct one distinctive name or term in that
 same field, Yaprflow asks you to confirm or edit the localized replacement
 before saving it. It does not install a
 global keyboard monitor, persist surrounding document text, learn from secure
-fields, or turn broad sentence rewrites into global rules.
+fields, or turn broad sentence rewrites into global rules. The target field
+must expose its selection and ranged text through macOS Accessibility; fields
+that do not expose those values still receive dictation but cannot be watched.
 
 ## Using a Programmable Mouse Button
 
