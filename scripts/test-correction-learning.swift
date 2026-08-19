@@ -5,9 +5,58 @@ import Foundation
 struct CorrectionLearningTests {
     static func main() throws {
         try testInferenceSafety()
+        testValueBackedObservation()
         try testMigrationPersistenceAndAtomicAliases()
         try testPersistenceFailureRollsBack()
         print("Correction learning tests passed")
+    }
+
+    private static func testValueBackedObservation() {
+        let endObservation = TextValueObservation(
+            original: "Draft: ",
+            selectionLocation: nil,
+            selectionLength: nil
+        )!
+        precondition(
+            endObservation.insertedSegment(
+                in: "Draft: I confirmed with Ciena today.",
+                expectedUTF16Length: "I confirmed with Sienna today.".utf16.count
+            ) == "I confirmed with Ciena today."
+        )
+        precondition(
+            endObservation.insertedSegment(
+                in: "Changed: I confirmed with Ciena today.",
+                expectedUTF16Length: "I confirmed with Sienna today.".utf16.count
+            ) == nil,
+            "An edit outside the inserted range must invalidate its prefix anchor."
+        )
+
+        let original = "Before OLD after"
+        let selected = (original as NSString).range(of: "OLD")
+        let replacementObservation = TextValueObservation(
+            original: original,
+            selectionLocation: selected.location,
+            selectionLength: selected.length
+        )!
+        precondition(
+            replacementObservation.insertedSegment(
+                in: "Before Ciena after",
+                expectedUTF16Length: "Sienna".utf16.count
+            ) == "Ciena"
+        )
+
+        let emojiObservation = TextValueObservation(
+            original: "👍🏽 ",
+            selectionLocation: nil,
+            selectionLength: nil
+        )!
+        precondition(
+            emojiObservation.insertedSegment(
+                in: "👍🏽 Ciena",
+                expectedUTF16Length: "Sienna".utf16.count
+            ) == "Ciena",
+            "Offsets must use Accessibility's UTF-16 coordinate system."
+        )
     }
 
     private static func testInferenceSafety() throws {

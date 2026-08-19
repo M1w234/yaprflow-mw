@@ -144,6 +144,8 @@ final class AppState: ObservableObject {
 
     /// Opt-in observation of the text range Yaprflow just inserted, plus small
     /// in-memory boundary anchors that prevent edits elsewhere from learning.
+    /// Compatibility fields may expose only their current AXValue; that value
+    /// is read transiently and immediately reduced to the same anchors.
     /// When a distinctive name/term is corrected in-place, Yaprflow asks the
     /// user to confirm or edit the localized replacement before saving it to
     /// personal vocabulary. No global keystrokes or surrounding document text

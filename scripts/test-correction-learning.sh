@@ -9,6 +9,7 @@ xcrun swiftc \
     -module-cache-path "$TEST_DIR/module-cache" \
     -parse-as-library \
     "$REPO_ROOT/yaprflow/CorrectionInference.swift" \
+    "$REPO_ROOT/yaprflow/TextValueObservation.swift" \
     "$REPO_ROOT/yaprflow/Vocabulary.swift" \
     "$REPO_ROOT/scripts/test-correction-learning.swift" \
     -o "$TEST_DIR/test-correction-learning"

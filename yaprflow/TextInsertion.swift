@@ -16,6 +16,8 @@ struct TextInsertionReceipt {
     let originalTotalCount: Int
     let prefixAnchor: String
     let suffixAnchor: String
+    /// Present when the target exposes AXValue but not ranged text APIs.
+    let valueObservation: TextValueObservation?
 }
 
 struct TextInsertionResult {
@@ -43,20 +45,30 @@ struct TextInsertionResult {
 @MainActor
 enum TextInsertion {
     static func insert(_ text: String, intoPID pid: pid_t) -> Bool {
-        insertWithResult(text, intoPID: pid) != nil
+        insertWithResult(text, intoPID: pid, captureCorrectionReceipt: false) != nil
     }
 
-    static func insertWithResult(_ text: String, intoPID pid: pid_t) -> TextInsertionResult? {
-        let axResult = axInsert(text, pid: pid)
+    static func insertWithResult(
+        _ text: String,
+        intoPID pid: pid_t,
+        captureCorrectionReceipt: Bool
+    ) -> TextInsertionResult? {
+        let axResult = axInsert(
+            text,
+            pid: pid,
+            captureCorrectionReceipt: captureCorrectionReceipt
+        )
         if axResult.succeeded {
             log.info("Inserted \(text.count, privacy: .public) chars via AX")
             return TextInsertionResult(receipt: axResult.receipt)
         }
         if typeUnicode(text) {
-            if axResult.receipt != nil {
+            if captureCorrectionReceipt, axResult.receipt != nil {
                 log.info("Inserted \(text.count, privacy: .public) chars via synthetic typing; correction monitoring available")
-            } else {
+            } else if captureCorrectionReceipt {
                 log.info("Inserted \(text.count, privacy: .public) chars via synthetic typing; correction monitoring unavailable for this field")
+            } else {
+                log.info("Inserted \(text.count, privacy: .public) chars via synthetic typing")
             }
             return TextInsertionResult(receipt: axResult.receipt)
         }
@@ -66,7 +78,8 @@ enum TextInsertion {
 
     private static func axInsert(
         _ text: String,
-        pid: pid_t
+        pid: pid_t,
+        captureCorrectionReceipt: Bool
     ) -> (succeeded: Bool, receipt: TextInsertionReceipt?) {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.3)
@@ -87,7 +100,9 @@ enum TextInsertion {
         // ranged text but do not allow kAXSelectedText to be set. Those fields
         // fall back to synthetic Unicode typing, and the same receipt can still
         // safely observe the exact range afterward for correction suggestions.
-        let receipt = makeReceipt(text: text, pid: pid, element: element)
+        let receipt = captureCorrectionReceipt
+            ? makeReceipt(text: text, pid: pid, element: element)
+            : nil
 
         var settable = DarwinBoolean(false)
         guard AXUIElementIsAttributeSettable(
@@ -107,13 +122,53 @@ enum TextInsertion {
         pid: pid_t,
         element: AXUIElement
     ) -> TextInsertionReceipt? {
-        guard let selection = readRange(element, kAXSelectedTextRangeAttribute),
-              selection.location >= 0,
-              selection.length >= 0,
-              let totalCount = readInt(element, kAXNumberOfCharactersAttribute),
-              totalCount >= selection.location + selection.length else {
-            return nil
+        let selection = readRange(element, kAXSelectedTextRangeAttribute)
+        if let selection,
+           selection.location >= 0,
+           selection.length >= 0,
+           let totalCount = readInt(element, kAXNumberOfCharactersAttribute),
+           totalCount >= selection.location + selection.length {
+            return makeRangedReceipt(
+                text: text,
+                pid: pid,
+                element: element,
+                selection: selection,
+                totalCount: totalCount
+            )
         }
+
+        // Electron/contenteditable fallback. AXValue may require the whole
+        // current composer value to be returned by macOS, but it is never
+        // retained: immediately reduce it to offsets and 32-character anchors.
+        let maximumObservedValueLength = 20_000
+        guard let originalValue = readValue(element),
+              originalValue.utf16.count <= maximumObservedValueLength,
+              let observation = TextValueObservation(
+                original: originalValue,
+                selectionLocation: selection?.location,
+                selectionLength: selection?.length
+              ) else { return nil }
+
+        return TextInsertionReceipt(
+            pid: pid,
+            element: element,
+            insertedText: text,
+            insertionStart: observation.insertionStart,
+            replacedLength: observation.replacedLength,
+            originalTotalCount: observation.originalTotalCount,
+            prefixAnchor: observation.prefixAnchor,
+            suffixAnchor: observation.suffixAnchor,
+            valueObservation: observation
+        )
+    }
+
+    private static func makeRangedReceipt(
+        text: String,
+        pid: pid_t,
+        element: AXUIElement,
+        selection: CFRange,
+        totalCount: Int
+    ) -> TextInsertionReceipt? {
 
         let anchorLength = 32
         let prefixStart = max(0, selection.location - anchorLength)
@@ -137,8 +192,19 @@ enum TextInsertion {
             replacedLength: selection.length,
             originalTotalCount: totalCount,
             prefixAnchor: prefix,
-            suffixAnchor: suffix
+            suffixAnchor: suffix,
+            valueObservation: nil
         )
+    }
+
+    private static func readValue(_ element: AXUIElement) -> String? {
+        var ref: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element, kAXValueAttribute as CFString, &ref
+        ) == .success else { return nil }
+        if let string = ref as? String { return string }
+        if let string = ref as? NSAttributedString { return string.string }
+        return nil
     }
 
     private static func readInt(_ element: AXUIElement, _ attribute: String) -> Int? {

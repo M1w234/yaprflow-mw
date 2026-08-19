@@ -37,12 +37,25 @@ final class CorrectionLearningMonitor {
                 } catch {
                     return
                 }
-                guard !Task.isCancelled,
-                      AppState.shared.learnFromCorrections,
-                      !AutoPaste.isSecureInputEnabled,
-                      NSWorkspace.shared.frontmostApplication?.processIdentifier == receipt.pid,
-                      focusedElementMatches(receipt),
-                      let current = readInsertedSegment(receipt) else {
+                guard !Task.isCancelled else { return }
+                guard AppState.shared.learnFromCorrections else {
+                    log.info("Correction observation ended: learning disabled")
+                    return
+                }
+                guard !AutoPaste.isSecureInputEnabled else {
+                    log.info("Correction observation ended: secure input enabled")
+                    return
+                }
+                guard NSWorkspace.shared.frontmostApplication?.processIdentifier == receipt.pid else {
+                    log.info("Correction observation ended: target app changed")
+                    return
+                }
+                guard focusedElementMatches(receipt) else {
+                    log.info("Correction observation ended: focused field changed")
+                    return
+                }
+                guard let current = readInsertedSegment(receipt) else {
+                    log.info("Correction observation ended: inserted range unreadable")
                     return
                 }
 
@@ -95,6 +108,15 @@ final class CorrectionLearningMonitor {
     private func readInsertedSegment(_ receipt: TextInsertionReceipt) -> String? {
         let element = receipt.element
         AXUIElementSetMessagingTimeout(element, 0.1)
+        if let observation = receipt.valueObservation {
+            let maximumObservedValueLength = 20_000
+            guard let value = readValue(element),
+                  value.utf16.count <= maximumObservedValueLength else { return nil }
+            return observation.insertedSegment(
+                in: value,
+                expectedUTF16Length: receipt.insertedText.utf16.count
+            )
+        }
         guard let totalCount = readInt(element, kAXNumberOfCharactersAttribute) else {
             return nil
         }
@@ -150,6 +172,16 @@ final class CorrectionLearningMonitor {
             kAXStringForRangeParameterizedAttribute as CFString,
             value,
             &ref
+        ) == .success else { return nil }
+        if let string = ref as? String { return string }
+        if let string = ref as? NSAttributedString { return string.string }
+        return nil
+    }
+
+    private func readValue(_ element: AXUIElement) -> String? {
+        var ref: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element, kAXValueAttribute as CFString, &ref
         ) == .success else { return nil }
         if let string = ref as? String { return string }
         if let string = ref as? NSAttributedString { return string.string }

@@ -258,7 +258,11 @@ final class TranscriptionController {
             log.info("Insertion skipped: focus changed since recording started")
             return false
         }
-        guard let result = TextInsertion.insertWithResult(text, intoPID: target) else {
+        guard let result = TextInsertion.insertWithResult(
+            text,
+            intoPID: target,
+            captureCorrectionReceipt: state.learnFromCorrections
+        ) else {
             return false
         }
         if state.learnFromCorrections, let receipt = result.receipt {
