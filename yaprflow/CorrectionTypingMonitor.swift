@@ -26,7 +26,7 @@ final class CorrectionTypingMonitor {
     private var onCandidate: ((CorrectionCandidate) -> Void)?
 
     private let observationDuration: Duration = .seconds(25)
-    private let quietInterval: Duration = .milliseconds(1_600)
+    private let quietInterval: Duration = .milliseconds(900)
     private let maximumBurstLength = 80
 
     private init() {}
@@ -140,6 +140,7 @@ final class CorrectionTypingMonitor {
         }
 
         if typeRaw == CGEventType.leftMouseDown.rawValue {
+            if presentCandidateIfAvailable() { return }
             sawEditGesture = true
             typedBurst = ""
             evaluationTask?.cancel()
@@ -152,10 +153,28 @@ final class CorrectionTypingMonitor {
         let typedKeyCode = CGKeyCode(keyCode)
 
         switch Int(typedKeyCode) {
-        case kVK_Escape, kVK_Return, kVK_ANSI_KeypadEnter, kVK_Tab:
+        case kVK_Escape:
             cancel()
             return
-        case kVK_Delete, kVK_ForwardDelete,
+        case kVK_Return, kVK_ANSI_KeypadEnter, kVK_Tab:
+            if presentCandidateIfAvailable() { return }
+            cancel()
+            return
+        case kVK_Delete:
+            if sawEditGesture, !typedBurst.isEmpty {
+                typedBurst.removeLast()
+                if typedBurst.isEmpty {
+                    evaluationTask?.cancel()
+                } else {
+                    scheduleEvaluation()
+                }
+                return
+            }
+            sawEditGesture = true
+            typedBurst = ""
+            evaluationTask?.cancel()
+            return
+        case kVK_ForwardDelete,
              kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow,
              kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown:
             sawEditGesture = true
@@ -168,6 +187,7 @@ final class CorrectionTypingMonitor {
 
         let flags = CGEventFlags(rawValue: flagsRaw)
         if flags.contains(.maskCommand) || flags.contains(.maskControl) {
+            if presentCandidateIfAvailable() { return }
             // A cut/paste or selection shortcut is an edit signal, but the
             // clipboard and command payload are deliberately not inspected.
             sawEditGesture = true
@@ -200,19 +220,29 @@ final class CorrectionTypingMonitor {
                 return
             }
             guard let self,
-                  !Task.isCancelled,
-                  let onCandidate else { return }
-            do {
-                let candidate = try CorrectionInference.inferFromTypedCorrection(
-                    original: originalText,
-                    typedCorrection: typedBurst
-                )
-                log.info("Typing fallback found a likely correction")
-                cancel()
-                onCandidate(candidate)
-            } catch {
+                  !Task.isCancelled else { return }
+            if !presentCandidateIfAvailable() {
                 log.info("Typing fallback ignored an ambiguous edit")
             }
+        }
+    }
+
+    /// Finish immediately when the buffered edit is already a safe match.
+    /// This lets a click, Return, Tab, or shortcut after the correction act as
+    /// a boundary instead of discarding a valid name before the quiet timer.
+    private func presentCandidateIfAvailable() -> Bool {
+        guard !typedBurst.isEmpty, let onCandidate else { return false }
+        do {
+            let candidate = try CorrectionInference.inferFromTypedCorrection(
+                original: originalText,
+                typedCorrection: typedBurst
+            )
+            log.info("Typing fallback found a likely correction")
+            cancel()
+            onCandidate(candidate)
+            return true
+        } catch {
+            return false
         }
     }
 }

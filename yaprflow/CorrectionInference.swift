@@ -178,7 +178,7 @@ enum CorrectionInference {
         }
         if let runnerUp = scored.dropFirst().first,
            runnerUp.candidate != best.candidate,
-           best.score - runnerUp.score < 0.12 {
+           best.score - runnerUp.score < 0.08 {
             throw CorrectionInferenceError.noLikelyMatch
         }
         return best.candidate

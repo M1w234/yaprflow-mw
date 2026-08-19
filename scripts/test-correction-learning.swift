@@ -98,6 +98,20 @@ struct CorrectionLearningTests {
         precondition(
             typedName == .init(misheard: "Sienna", replacement: "Ciena")
         )
+        let typedNameInFullSentence = try CorrectionInference.inferFromTypedCorrection(
+            original: "I confirmed the appointment with Sienna, so we're good to go.",
+            typedCorrection: "Ciena"
+        )
+        precondition(
+            typedNameInFullSentence == .init(misheard: "Sienna", replacement: "Ciena")
+        )
+        let typedShorterVariant = try CorrectionInference.inferFromTypedCorrection(
+            original: "I confirmed the appointment with Siena, so we're good to go.",
+            typedCorrection: "Ciena"
+        )
+        precondition(
+            typedShorterVariant == .init(misheard: "Siena", replacement: "Ciena")
+        )
         let typedAcronym = try CorrectionInference.inferFromTypedCorrection(
             original: "Use a pie for it",
             typedCorrection: "API"
