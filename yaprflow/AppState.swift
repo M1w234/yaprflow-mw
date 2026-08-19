@@ -146,10 +146,12 @@ final class AppState: ObservableObject {
     /// in-memory boundary anchors that prevent edits elsewhere from learning.
     /// Compatibility fields may expose only their current AXValue; that value
     /// is read transiently and immediately reduced to the same anchors.
+    /// If a web field exposes neither, a listen-only event tap briefly retains
+    /// only a short typing burst after an edit gesture in the target app.
     /// When a distinctive name/term is corrected in-place, Yaprflow asks the
     /// user to confirm or edit the localized replacement before saving it to
-    /// personal vocabulary. No global keystrokes or surrounding document text
-    /// are persisted.
+    /// personal vocabulary. No surrounding document text or observed typing
+    /// is persisted.
     @Published var learnFromCorrections: Bool {
         didSet {
             UserDefaults.standard.set(

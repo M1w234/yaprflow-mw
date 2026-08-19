@@ -265,8 +265,15 @@ final class TranscriptionController {
         ) else {
             return false
         }
-        if state.learnFromCorrections, let receipt = result.receipt {
-            CorrectionLearningMonitor.shared.begin(receipt)
+        if state.learnFromCorrections {
+            if let receipt = result.receipt {
+                CorrectionLearningMonitor.shared.begin(receipt)
+            } else {
+                CorrectionLearningMonitor.shared.beginTypingFallback(
+                    originalText: text,
+                    targetPID: target
+                )
+            }
         }
         return true
     }

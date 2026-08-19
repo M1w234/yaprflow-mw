@@ -87,11 +87,11 @@ composer value may require that value to be read transiently; it is immediately
 reduced to the inserted segment and boundary anchors and is not retained. If
 you correct one distinctive name or term in that
 same field, Yaprflow asks you to confirm or edit the localized replacement
-before saving it. It does not install a
-global keyboard monitor, persist surrounding document text, learn from secure
-fields, or turn broad sentence rewrites into global rules. The target field
-must expose either ranged text or its current value through macOS Accessibility;
-fields that expose neither still receive dictation but cannot be watched.
+before saving it. If a web field exposes neither ranged text nor its current
+value, a listen-only event tap runs for at most 25 seconds and retains only a
+short typing burst after an edit gesture in the original target app. It cannot
+block or alter typing, and the burst is never persisted. Yaprflow never learns
+from secure fields or turns broad sentence rewrites into global rules.
 
 ## Using a Programmable Mouse Button
 

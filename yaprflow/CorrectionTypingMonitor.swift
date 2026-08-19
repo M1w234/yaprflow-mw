@@ -1,0 +1,218 @@
+import AppKit
+import Carbon.HIToolbox
+import CoreGraphics
+import OSLog
+
+private let log = Logger(subsystem: "com.teamwong.yaprflow", category: "CorrectionTyping")
+
+/// Last-resort correction observation for web/contenteditable controls that
+/// expose neither ranged text nor AXValue. The listen-only tap is installed
+/// for at most 25 seconds, filters immediately to the original target app, and
+/// retains at most a short post-edit typing burst. It never blocks or changes
+/// an event and never persists the burst; a suggestion still requires explicit
+/// confirmation before VocabularyStore is touched.
+@MainActor
+final class CorrectionTypingMonitor {
+    static let shared = CorrectionTypingMonitor()
+
+    private var tap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    private var deadlineTask: Task<Void, Never>?
+    private var evaluationTask: Task<Void, Never>?
+    private var targetPID: pid_t?
+    private var originalText = ""
+    private var typedBurst = ""
+    private var sawEditGesture = false
+    private var onCandidate: ((CorrectionCandidate) -> Void)?
+
+    private let observationDuration: Duration = .seconds(25)
+    private let quietInterval: Duration = .milliseconds(1_600)
+    private let maximumBurstLength = 80
+
+    private init() {}
+
+    @discardableResult
+    func begin(
+        originalText: String,
+        targetPID: pid_t,
+        onCandidate: @escaping (CorrectionCandidate) -> Void
+    ) -> Bool {
+        cancel()
+        self.originalText = originalText
+        self.targetPID = targetPID
+        self.onCandidate = onCandidate
+
+        let mask: CGEventMask =
+            (1 << CGEventType.keyDown.rawValue) |
+            (1 << CGEventType.leftMouseDown.rawValue) |
+            (1 << CGEventType.tapDisabledByTimeout.rawValue) |
+            (1 << CGEventType.tapDisabledByUserInput.rawValue)
+        let userInfo = Unmanaged.passUnretained(self).toOpaque()
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: mask,
+            callback: { _, type, event, refcon in
+                guard let refcon else { return Unmanaged.passUnretained(event) }
+                let monitor = Unmanaged<CorrectionTypingMonitor>
+                    .fromOpaque(refcon).takeUnretainedValue()
+                monitor.handleFromTap(type: type, event: event)
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: userInfo
+        ) else {
+            log.info("Typing fallback unavailable: listen-only event tap could not be created")
+            cancel()
+            return false
+        }
+
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        self.tap = tap
+        runLoopSource = source
+        deadlineTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: self?.observationDuration ?? .seconds(25))
+            guard !Task.isCancelled else { return }
+            self?.cancel()
+        }
+        log.info("Typing fallback active for target app")
+        return true
+    }
+
+    func cancel() {
+        deadlineTask?.cancel()
+        deadlineTask = nil
+        evaluationTask?.cancel()
+        evaluationTask = nil
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+            self.runLoopSource = nil
+        }
+        if let tap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+            self.tap = nil
+        }
+        targetPID = nil
+        originalText = ""
+        typedBurst = ""
+        sawEditGesture = false
+        onCandidate = nil
+    }
+
+    nonisolated private func handleFromTap(type: CGEventType, event: CGEvent) {
+        let typeRaw = type.rawValue
+        let eventPID = event.getIntegerValueField(.eventTargetUnixProcessID)
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let flagsRaw = event.flags.rawValue
+        let characters = type == .keyDown ? NSEvent(cgEvent: event)?.characters : nil
+        MainActor.assumeIsolated {
+            if typeRaw == CGEventType.tapDisabledByTimeout.rawValue
+                || typeRaw == CGEventType.tapDisabledByUserInput.rawValue {
+                if let tap = self.tap { CGEvent.tapEnable(tap: tap, enable: true) }
+                return
+            }
+            self.process(
+                typeRaw: typeRaw,
+                eventPID: eventPID,
+                keyCode: keyCode,
+                flagsRaw: flagsRaw,
+                characters: characters
+            )
+        }
+    }
+
+    private func process(
+        typeRaw: UInt32,
+        eventPID: Int64,
+        keyCode: Int64,
+        flagsRaw: UInt64,
+        characters: String?
+    ) {
+        guard let targetPID,
+              AppState.shared.learnFromCorrections,
+              !AutoPaste.isSecureInputEnabled,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else {
+            cancel()
+            return
+        }
+
+        if typeRaw == CGEventType.leftMouseDown.rawValue {
+            sawEditGesture = true
+            typedBurst = ""
+            evaluationTask?.cancel()
+            return
+        }
+        guard typeRaw == CGEventType.keyDown.rawValue else { return }
+
+        let typedEventPID = pid_t(eventPID)
+        guard typedEventPID == 0 || typedEventPID == targetPID else { return }
+        let typedKeyCode = CGKeyCode(keyCode)
+
+        switch Int(typedKeyCode) {
+        case kVK_Escape, kVK_Return, kVK_ANSI_KeypadEnter, kVK_Tab:
+            cancel()
+            return
+        case kVK_Delete, kVK_ForwardDelete,
+             kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow,
+             kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown:
+            sawEditGesture = true
+            typedBurst = ""
+            evaluationTask?.cancel()
+            return
+        default:
+            break
+        }
+
+        let flags = CGEventFlags(rawValue: flagsRaw)
+        if flags.contains(.maskCommand) || flags.contains(.maskControl) {
+            // A cut/paste or selection shortcut is an edit signal, but the
+            // clipboard and command payload are deliberately not inspected.
+            sawEditGesture = true
+            typedBurst = ""
+            evaluationTask?.cancel()
+            return
+        }
+        guard sawEditGesture,
+              let characters,
+              !characters.isEmpty,
+              characters.unicodeScalars.allSatisfy({
+                !CharacterSet.controlCharacters.contains($0)
+              }) else {
+            return
+        }
+
+        typedBurst.append(contentsOf: characters)
+        if typedBurst.count > maximumBurstLength {
+            typedBurst = String(typedBurst.suffix(maximumBurstLength))
+        }
+        scheduleEvaluation()
+    }
+
+    private func scheduleEvaluation() {
+        evaluationTask?.cancel()
+        evaluationTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: self?.quietInterval ?? .milliseconds(1_600))
+            } catch {
+                return
+            }
+            guard let self,
+                  !Task.isCancelled,
+                  let onCandidate else { return }
+            do {
+                let candidate = try CorrectionInference.inferFromTypedCorrection(
+                    original: originalText,
+                    typedCorrection: typedBurst
+                )
+                log.info("Typing fallback found a likely correction")
+                cancel()
+                onCandidate(candidate)
+            } catch {
+                log.info("Typing fallback ignored an ambiguous edit")
+            }
+        }
+    }
+}

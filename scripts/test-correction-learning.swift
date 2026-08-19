@@ -91,6 +91,32 @@ struct CorrectionLearningTests {
         )
         precondition(!ordinaryEdit.isSafeForAutomaticLearning)
 
+        let typedName = try CorrectionInference.inferFromTypedCorrection(
+            original: "I confirmed with Sienna about the appointment",
+            typedCorrection: "Ciena"
+        )
+        precondition(
+            typedName == .init(misheard: "Sienna", replacement: "Ciena")
+        )
+        let typedAcronym = try CorrectionInference.inferFromTypedCorrection(
+            original: "Use a pie for it",
+            typedCorrection: "API"
+        )
+        precondition(
+            typedAcronym == .init(misheard: "a pie", replacement: "API")
+        )
+        do {
+            _ = try CorrectionInference.inferFromTypedCorrection(
+                original: "Call Sienna or Xienna tomorrow",
+                typedCorrection: "Ciena"
+            )
+            preconditionFailure("Expected an ambiguous typed correction to be rejected")
+        } catch CorrectionInferenceError.noLikelyMatch {
+            // Expected.
+        } catch {
+            preconditionFailure("Unexpected typed-correction error: \(error)")
+        }
+
         try expectError(
             original: "send it today",
             corrected: "send it",

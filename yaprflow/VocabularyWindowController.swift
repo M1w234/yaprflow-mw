@@ -141,7 +141,7 @@ struct VocabularyView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Learn from corrections")
                     .font(.system(size: 13, weight: .medium))
-                Text("After insertion, briefly watch that text and small boundary checks. Compatibility fields may require transiently reading the current composer value; it is not retained. A distinctive correction prompts you before saving.")
+                Text("After insertion, briefly watch that text and small boundary checks. Web compatibility may transiently read the composer value or a short post-edit typing burst; neither is retained. Every suggestion requires confirmation.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

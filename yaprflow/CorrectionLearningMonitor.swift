@@ -6,10 +6,12 @@ import OSLog
 private let log = Logger(subsystem: "com.teamwong.yaprflow", category: "CorrectionLearning")
 
 /// Short-lived, opt-in observation of the exact text range Yaprflow inserted.
-/// It never installs a keyboard tap. Small prefix/suffix anchors are retained
-/// in memory for at most this observation window to prove that edits stayed
-/// inside the inserted range. A validated short replacement is presented for
-/// confirmation and is persisted only after the user chooses Learn.
+/// It prefers ranged Accessibility observation. Small prefix/suffix anchors
+/// are retained in memory for at most this observation window to prove that
+/// edits stayed inside the inserted range. When the target field exposes no
+/// readable text, CorrectionTypingMonitor supplies a bounded typing fallback.
+/// A validated short replacement is presented for confirmation and is
+/// persisted only after the user chooses Learn.
 @MainActor
 final class CorrectionLearningMonitor {
     static let shared = CorrectionLearningMonitor()
@@ -87,9 +89,21 @@ final class CorrectionLearningMonitor {
         }
     }
 
+    func beginTypingFallback(originalText: String, targetPID: pid_t) {
+        cancel()
+        guard AppState.shared.learnFromCorrections else { return }
+        _ = CorrectionTypingMonitor.shared.begin(
+            originalText: originalText,
+            targetPID: targetPID
+        ) { [weak self] candidate in
+            self?.presentSuggestion(candidate)
+        }
+    }
+
     func cancel() {
         task?.cancel()
         task = nil
+        CorrectionTypingMonitor.shared.cancel()
         CorrectionLearningConfirmationController.shared.dismiss()
     }
 
