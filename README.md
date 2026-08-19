@@ -91,7 +91,10 @@ before saving it. If a web field exposes neither ranged text nor its current
 value, a listen-only event tap runs for at most 25 seconds and retains only a
 short typing burst after an edit gesture in the original target app. It cannot
 block or alter typing, and the burst is never persisted. Yaprflow never learns
-from secure fields or turns broad sentence rewrites into global rules.
+from secure fields or turns broad sentence rewrites into global rules. During
+that brief window, events outside the original app are discarded before their
+characters are read. Avoid entering sensitive information in a non-secure field
+of that same app until the correction prompt appears or the window ends.
 
 ## Using a Programmable Mouse Button
 

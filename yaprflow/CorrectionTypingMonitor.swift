@@ -19,10 +19,12 @@ final class CorrectionTypingMonitor {
     private var runLoopSource: CFRunLoopSource?
     private var deadlineTask: Task<Void, Never>?
     private var evaluationTask: Task<Void, Never>?
+    private var deferredActionTask: Task<Void, Never>?
     private var targetPID: pid_t?
     private var originalText = ""
     private var typedBurst = ""
     private var sawEditGesture = false
+    private var isFinishing = false
     private var onCandidate: ((CorrectionCandidate) -> Void)?
 
     private let observationDuration: Duration = .seconds(25)
@@ -86,6 +88,8 @@ final class CorrectionTypingMonitor {
         deadlineTask = nil
         evaluationTask?.cancel()
         evaluationTask = nil
+        deferredActionTask?.cancel()
+        deferredActionTask = nil
         if let runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
             self.runLoopSource = nil
@@ -99,6 +103,7 @@ final class CorrectionTypingMonitor {
         originalText = ""
         typedBurst = ""
         sawEditGesture = false
+        isFinishing = false
         onCandidate = nil
     }
 
@@ -107,13 +112,23 @@ final class CorrectionTypingMonitor {
         let eventPID = event.getIntegerValueField(.eventTargetUnixProcessID)
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flagsRaw = event.flags.rawValue
+        if typeRaw == CGEventType.tapDisabledByTimeout.rawValue
+            || typeRaw == CGEventType.tapDisabledByUserInput.rawValue {
+            MainActor.assumeIsolated {
+                if let tap = self.tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            }
+            return
+        }
+
+        // Check the immutable event metadata and current target context before
+        // materializing any key characters. Events for other apps are never
+        // converted into text, even transiently.
+        let acceptsEvent = MainActor.assumeIsolated {
+            self.acceptsEvent(eventPID: eventPID)
+        }
+        guard acceptsEvent else { return }
         let characters = type == .keyDown ? NSEvent(cgEvent: event)?.characters : nil
         MainActor.assumeIsolated {
-            if typeRaw == CGEventType.tapDisabledByTimeout.rawValue
-                || typeRaw == CGEventType.tapDisabledByUserInput.rawValue {
-                if let tap = self.tap { CGEvent.tapEnable(tap: tap, enable: true) }
-                return
-            }
             self.process(
                 typeRaw: typeRaw,
                 eventPID: eventPID,
@@ -124,6 +139,19 @@ final class CorrectionTypingMonitor {
         }
     }
 
+    private func acceptsEvent(eventPID: Int64) -> Bool {
+        guard !isFinishing,
+              let targetPID,
+              AppState.shared.learnFromCorrections,
+              !AutoPaste.isSecureInputEnabled,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else {
+            scheduleCancel()
+            return false
+        }
+        let typedEventPID = pid_t(eventPID)
+        return typedEventPID == 0 || typedEventPID == targetPID
+    }
+
     private func process(
         typeRaw: UInt32,
         eventPID: Int64,
@@ -131,11 +159,12 @@ final class CorrectionTypingMonitor {
         flagsRaw: UInt64,
         characters: String?
     ) {
-        guard let targetPID,
+        guard !isFinishing,
+              let targetPID,
               AppState.shared.learnFromCorrections,
               !AutoPaste.isSecureInputEnabled,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else {
-            cancel()
+            scheduleCancel()
             return
         }
 
@@ -154,11 +183,11 @@ final class CorrectionTypingMonitor {
 
         switch Int(typedKeyCode) {
         case kVK_Escape:
-            cancel()
+            scheduleCancel()
             return
         case kVK_Return, kVK_ANSI_KeypadEnter, kVK_Tab:
             if presentCandidateIfAvailable() { return }
-            cancel()
+            scheduleCancel()
             return
         case kVK_Delete:
             if sawEditGesture, !typedBurst.isEmpty {
@@ -215,7 +244,7 @@ final class CorrectionTypingMonitor {
         evaluationTask?.cancel()
         evaluationTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(for: self?.quietInterval ?? .milliseconds(1_600))
+                try await Task.sleep(for: self?.quietInterval ?? .milliseconds(900))
             } catch {
                 return
             }
@@ -238,11 +267,31 @@ final class CorrectionTypingMonitor {
                 typedCorrection: typedBurst
             )
             log.info("Typing fallback found a likely correction")
-            cancel()
-            onCandidate(candidate)
+            isFinishing = true
+            evaluationTask?.cancel()
+            evaluationTask = nil
+            deferredActionTask = Task { @MainActor [weak self] in
+                guard let self, !Task.isCancelled else { return }
+                self.cancel()
+                onCandidate(candidate)
+            }
             return true
         } catch {
             return false
+        }
+    }
+
+    /// Event-tap callbacks return before their run-loop source is invalidated.
+    /// This avoids tearing down the CFMachPort or presenting UI reentrantly
+    /// from inside the callback that is currently using it.
+    private func scheduleCancel() {
+        guard !isFinishing else { return }
+        isFinishing = true
+        evaluationTask?.cancel()
+        evaluationTask = nil
+        deferredActionTask = Task { @MainActor [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            self.cancel()
         }
     }
 }

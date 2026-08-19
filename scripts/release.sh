@@ -114,6 +114,11 @@ TEMP_DMG="$BUILD_DIR/$DMG_NAME.tmp.dmg"
 APP_ZIP="$BUILD_DIR/$APP_NAME-$VERSION.zip"
 TAG="v$VERSION"
 
+# ---- Release tests ----------------------------------------------------------
+
+echo "==> Running correction learning tests"
+scripts/test-correction-learning.sh
+
 # ---- Decide whether to sign + notarize ---------------------------------------
 
 NOTARIZE=true
