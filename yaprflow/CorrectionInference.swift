@@ -145,26 +145,26 @@ enum CorrectionInference {
         }
 
         var scored: [(candidate: CorrectionCandidate, score: Double)] = []
+        // A direct correction starts with the replacement because observation
+        // begins at the edit gesture. Only consider that leading one- or
+        // two-word prefix. Searching later words would mistake a name buried
+        // inside a rewritten sentence for the thing the user meant to teach.
         for replacementLength in 1...min(2, typedWords.count) {
-            for replacementStart in 0...(typedWords.count - replacementLength) {
-                let replacement = typedWords[
-                    replacementStart..<(replacementStart + replacementLength)
-                ].joined(separator: " ")
-                for heardLength in 1...min(2, originalWords.count) {
-                    for heardStart in 0...(originalWords.count - heardLength) {
-                        let heard = originalWords[
-                            heardStart..<(heardStart + heardLength)
-                        ].joined(separator: " ")
-                        let candidate = CorrectionCandidate(
-                            misheard: heard,
-                            replacement: replacement
-                        )
-                        guard heard.caseInsensitiveCompare(replacement) != .orderedSame,
-                              candidate.isSafeForAutomaticLearning else { continue }
-                        let score = similarity(heard, replacement)
-                        guard score >= 0.50 else { continue }
-                        scored.append((candidate, score))
-                    }
+            let replacement = typedWords.prefix(replacementLength).joined(separator: " ")
+            for heardLength in 1...min(2, originalWords.count) {
+                for heardStart in 0...(originalWords.count - heardLength) {
+                    let heard = originalWords[
+                        heardStart..<(heardStart + heardLength)
+                    ].joined(separator: " ")
+                    let candidate = CorrectionCandidate(
+                        misheard: heard,
+                        replacement: replacement
+                    )
+                    guard heard.caseInsensitiveCompare(replacement) != .orderedSame,
+                          candidate.isSafeForAutomaticLearning else { continue }
+                    let score = similarity(heard, replacement)
+                    guard score >= 0.50 else { continue }
+                    scored.append((candidate, score))
                 }
             }
         }

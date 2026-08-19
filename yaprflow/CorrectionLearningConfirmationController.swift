@@ -170,7 +170,7 @@ private struct CorrectionLearningConfirmationView: View {
                         .lineLimit(2)
                 }
                 Spacer()
-                Button("Not Now") { model.onDismiss?() }
+                Button("Ignore") { model.onDismiss?() }
                     .keyboardShortcut(.cancelAction)
                 if !model.isEditing {
                     Button("Edit\u{2026}") { model.onEdit?() }

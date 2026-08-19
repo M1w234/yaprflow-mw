@@ -112,6 +112,24 @@ struct CorrectionLearningTests {
         precondition(
             typedShorterVariant == .init(misheard: "Siena", replacement: "Ciena")
         )
+        let typedNameThenContinuation = try CorrectionInference.inferFromTypedCorrection(
+            original: "I confirmed the appointment with Sienna.",
+            typedCorrection: "Ciena and her assistant"
+        )
+        precondition(
+            typedNameThenContinuation == .init(misheard: "Sienna", replacement: "Ciena")
+        )
+        do {
+            _ = try CorrectionInference.inferFromTypedCorrection(
+                original: "I confirmed the appointment with Sienna.",
+                typedCorrection: "Actually I called Ciena instead"
+            )
+            preconditionFailure("A name buried inside a rewrite must not be learned")
+        } catch CorrectionInferenceError.noLikelyMatch {
+            // Expected.
+        } catch {
+            preconditionFailure("Unexpected rewrite error: \(error)")
+        }
         let typedAcronym = try CorrectionInference.inferFromTypedCorrection(
             original: "Use a pie for it",
             typedCorrection: "API"
