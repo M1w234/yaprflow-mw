@@ -476,8 +476,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             item.target = self
             item.representedObject = speed.rawValue
             item.toolTip = switch speed {
-            case .fast: "Starts sooner for a dedicated dictation chord."
-            case .balanced: "The default balance of response and shortcut protection."
+            case .fast: "Default. Starts sooner for a dedicated dictation chord."
+            case .balanced: "Balances response speed with shortcut protection."
             case .safe: "Leaves time to continue into another keyboard shortcut."
             }
             menu.addItem(item)

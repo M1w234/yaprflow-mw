@@ -341,7 +341,7 @@ final class AppState: ObservableObject {
            let stored = ModifierResponseSpeed(rawValue: raw) {
             self.modifierResponseSpeed = stored
         } else {
-            self.modifierResponseSpeed = .balanced
+            self.modifierResponseSpeed = .fast
         }
         if let raw = UserDefaults.standard.string(forKey: Self.numberFormattingModeKey),
            let stored = NumberFormattingMode(rawValue: raw) {
