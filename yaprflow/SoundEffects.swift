@@ -269,6 +269,11 @@ enum SoundEffect {
     /// last reference dies before playback finishes.
     private static var activeSound: NSSound?
 
+    /// Picker auditions have their own lifecycle: starting another preview
+    /// replaces the previous one, and closing the picker stops it. This avoids
+    /// a stack of overlapping chimes when the pointer moves down the menu.
+    private static var previewSound: NSSound?
+
     private var systemSoundName: String {
         switch self {
         case .start: return AppState.shared.startSoundName
@@ -288,33 +293,64 @@ enum SoundEffect {
     /// the sound picker so users can audition options even when chimes are
     /// turned off overall.
     static func preview(_ name: String) {
-        playByName(name)
+        previewSound?.stop()
+        previewSound = nil
+
+        guard let sound = resolvedSound(named: name, isolatedSystemSound: true) else {
+            log.error("Sound \(name, privacy: .public) not found (bundle or system)")
+            return
+        }
+        sound.volume = currentVolume
+        previewSound = sound
+        sound.play()
+    }
+
+    static func stopPreview() {
+        previewSound?.stop()
+        previewSound = nil
     }
 
     private static func playByName(_ name: String) {
-        let volume = min(max(AppState.shared.soundEffectsVolume, 0), 1)
+        guard let sound = resolvedSound(named: name, isolatedSystemSound: false) else {
+            log.error("Sound \(name, privacy: .public) not found (bundle or system)")
+            return
+        }
+        activeSound = sound
+        sound.volume = currentVolume
+        sound.play()
+    }
 
+    private static var currentVolume: Float {
+        min(max(AppState.shared.soundEffectsVolume, 0), 1)
+    }
+
+    private static func resolvedSound(
+        named name: String,
+        isolatedSystemSound: Bool
+    ) -> NSSound? {
         if let url = importedSoundURL(for: name),
            let sound = NSSound(contentsOf: url, byReference: true) {
-            activeSound = sound
-            sound.volume = volume
-            sound.play()
-            return
+            return sound
         }
 
         // Bundled custom chimes win over same-named system sounds.
         if let url = bundledSoundURL(named: name),
            let sound = NSSound(contentsOf: url, byReference: true) {
-            activeSound = sound
-            sound.volume = volume
-            sound.play()
-            return
+            return sound
         }
-        guard let sound = NSSound(named: NSSound.Name(name)) else {
-            log.error("Sound \(name, privacy: .public) not found (bundle or system)")
-            return
+
+        // NSSound(named:) may return the same cached instance repeatedly.
+        // Picker previews need an independent player so stopping an audition
+        // cannot cut off a real start/stop confirmation sound.
+        if isolatedSystemSound {
+            let url = URL(fileURLWithPath: "/System/Library/Sounds")
+                .appendingPathComponent(name)
+                .appendingPathExtension("aiff")
+            if let sound = NSSound(contentsOf: url, byReference: true) {
+                return sound
+            }
         }
-        sound.volume = volume
-        sound.play()
+
+        return NSSound(named: NSSound.Name(name))
     }
 }

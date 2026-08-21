@@ -4,9 +4,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var cleanupModeMenu: NSMenu?
+    private var modifierResponseMenu: NSMenu?
     private var startSoundPickerMenu: NSMenu?
     private var stopSoundPickerMenu: NSMenu?
     private var soundsMenuItem: NSMenuItem?
@@ -460,6 +461,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return submenu
     }
 
+    private func buildModifierResponseMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem.sectionHeader(
+            title: "Use Safe when this chord overlaps other shortcuts"
+        ))
+        for speed in ModifierResponseSpeed.allCases {
+            let item = NSMenuItem(
+                title: speed.displayName,
+                action: #selector(selectModifierResponseSpeed(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = speed.rawValue
+            item.toolTip = switch speed {
+            case .fast: "Starts sooner for a dedicated dictation chord."
+            case .balanced: "The default balance of response and shortcut protection."
+            case .safe: "Leaves time to continue into another keyboard shortcut."
+            }
+            menu.addItem(item)
+        }
+        modifierResponseMenu = menu
+        refreshModifierResponseCheckmarks()
+        return menu
+    }
+
+    @objc private func selectModifierResponseSpeed(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let speed = ModifierResponseSpeed(rawValue: raw) else { return }
+        AppState.shared.modifierResponseSpeed = speed
+        refreshModifierResponseCheckmarks()
+        NotificationCenter.default.post(name: .yaprflowHotkeyChanged, object: nil)
+    }
+
+    private func refreshModifierResponseCheckmarks() {
+        let current = AppState.shared.modifierResponseSpeed
+        modifierResponseMenu?.items.forEach { item in
+            let speed = (item.representedObject as? String)
+                .flatMap(ModifierResponseSpeed.init(rawValue:))
+            item.state = speed == current ? .on : .off
+        }
+    }
+
     @objc private func selectCleanupMode(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let mode = CleanupMode(rawValue: raw) else { return }
@@ -482,6 +525,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func buildAdvancedSubmenu() -> NSMenu {
         let submenu = NSMenu()
+
+        let responseItem = NSMenuItem(
+            title: "Keyboard Shortcut Response",
+            action: nil,
+            keyEquivalent: ""
+        )
+        responseItem.image = NSImage(
+            systemSymbolName: "speedometer",
+            accessibilityDescription: nil
+        )
+        responseItem.submenu = buildModifierResponseMenu()
+        responseItem.toolTip = "Changes how long a modifier-only shortcut must be held before dictation starts."
+        submenu.addItem(responseItem)
+
+        submenu.addItem(NSMenuItem.separator())
 
         let streamingItem = NSMenuItem()
         streamingItem.view = StreamingModeMenuItemView()
@@ -585,6 +643,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func buildSoundPickerMenu(forStart: Bool) -> NSMenu {
         let menu = NSMenu()
+        menu.delegate = self
         let current = forStart
             ? AppState.shared.startSoundName
             : AppState.shared.stopSoundName
@@ -601,6 +660,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             item.target = self
             item.representedObject = identifier
             item.state = (identifier == current) ? .on : .off
+            item.toolTip = "Highlight to preview. Click to select."
             menu.addItem(item)
         }
 
@@ -639,6 +699,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return menu
     }
 
+    /// Audition sounds while the picker remains open. Highlighting works with
+    /// both pointer movement and the keyboard's arrow-key menu navigation;
+    /// only activating an item commits the new selection.
+    func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        guard menu === startSoundPickerMenu || menu === stopSoundPickerMenu,
+              let identifier = item?.representedObject as? String else {
+            return
+        }
+        SoundEffect.preview(identifier)
+    }
+
+    /// Imported sounds may be up to 30 seconds long. Leaving the picker should
+    /// end the audition immediately instead of letting it continue in the
+    /// background after the user has moved on.
+    func menuDidClose(_ menu: NSMenu) {
+        guard menu === startSoundPickerMenu || menu === stopSoundPickerMenu else {
+            return
+        }
+        SoundEffect.stopPreview()
+    }
+
     @objc private func toggleSoundsEnabled(_ sender: NSMenuItem) {
         AppState.shared.soundEffectsEnabled.toggle()
         sender.state = AppState.shared.soundEffectsEnabled ? .on : .off
@@ -648,16 +729,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard let name = sender.representedObject as? String else { return }
         AppState.shared.startSoundName = name
         refreshSoundCheckmarks(in: sender.menu, current: name)
-        // Bypass the enabled gate so users can audition while picking, even
-        // with chimes turned off overall.
-        SoundEffect.preview(name)
     }
 
     @objc private func selectStopSound(_ sender: NSMenuItem) {
         guard let name = sender.representedObject as? String else { return }
         AppState.shared.stopSoundName = name
         refreshSoundCheckmarks(in: sender.menu, current: name)
-        SoundEffect.preview(name)
     }
 
     @objc private func resetSoundsToDefaults() {
@@ -789,7 +866,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             ModifierOnlyHotkey.shared.register(
                 modifiers: config.modifiers,
                 sideMask: config.sideMask,
-                sideMatching: !AppState.shared.bothKeyboardSides
+                sideMatching: !AppState.shared.bothKeyboardSides,
+                holdEngageMilliseconds: AppState.shared.modifierResponseSpeed
+                    .holdEngageMilliseconds
             )
         } else {
             ModifierOnlyHotkey.shared.unregister()

@@ -35,10 +35,10 @@ final class ModifierOnlyHotkey {
     /// Idempotent: only called when transitioning from recording → not-recording.
     nonisolated(unsafe) static var onStop: (@Sendable () -> Void)?
 
-    /// Minimum chord hold time before hold-to-talk engages. Tuned for ⌘⇧ —
-    /// long enough that typing ⌘⇧+letter chords quickly doesn't accidentally
-    /// engage hold mode, short enough that a deliberate hold feels responsive.
-    private static let holdEngageMilliseconds: Int = 200
+    /// Minimum chord hold time before hold-to-talk engages. Configurable so a
+    /// dedicated dictation chord can feel immediate while a shared shortcut
+    /// prefix such as ⌘⇧ can retain more false-trigger protection.
+    private var holdEngageMilliseconds: Int = 200
 
     /// Maximum gap between two chord taps to count as a double-tap.
     private static let doubleTapWindowMilliseconds: Int = 400
@@ -121,7 +121,12 @@ final class ModifierOnlyHotkey {
 
     private init() {}
 
-    func register(modifiers: UInt32, sideMask: UInt = 0, sideMatching: Bool = true) {
+    func register(
+        modifiers: UInt32,
+        sideMask: UInt = 0,
+        sideMatching: Bool = true,
+        holdEngageMilliseconds: Int = 200
+    ) {
         unregister()
         guard modifiers != 0 else {
             log.error("refusing to register modifier-only hotkey with empty mask")
@@ -130,6 +135,7 @@ final class ModifierOnlyHotkey {
         self.desiredMask = modifiers
         self.desiredSideMask = sideMask
         self.sideMatchingEnabled = sideMatching
+        self.holdEngageMilliseconds = max(0, holdEngageMilliseconds)
         resetState()
         installTapIfNeeded()
     }
@@ -435,7 +441,7 @@ final class ModifierOnlyHotkey {
         }
         holdEngageWork = work
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + .milliseconds(Self.holdEngageMilliseconds),
+            deadline: .now() + .milliseconds(holdEngageMilliseconds),
             execute: work
         )
     }

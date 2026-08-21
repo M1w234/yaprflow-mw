@@ -15,6 +15,31 @@ enum CleanupMode: String, CaseIterable {
     }
 }
 
+/// How long a modifier-only chord must remain exact before hold-to-talk
+/// begins. Faster settings feel more immediate; slower settings leave more
+/// time to add a regular shortcut key without accidentally starting dictation.
+enum ModifierResponseSpeed: String, CaseIterable {
+    case fast
+    case balanced
+    case safe
+
+    var displayName: String {
+        switch self {
+        case .fast: return "Fast"
+        case .balanced: return "Balanced"
+        case .safe: return "Safe"
+        }
+    }
+
+    var holdEngageMilliseconds: Int {
+        switch self {
+        case .fast: return 100
+        case .balanced: return 200
+        case .safe: return 300
+        }
+    }
+}
+
 enum TranscriptionStatus: Equatable {
     case idle
     case preparing(String)
@@ -48,6 +73,7 @@ final class AppState: ObservableObject {
     private static let learnFromCorrectionsKey = "yaprflow.learnFromCorrections"
     private static let keyboardShortcutEnabledKey = "yaprflow.keyboardShortcutEnabled"
     private static let bothKeyboardSidesKey = "yaprflow.bothKeyboardSides"
+    private static let modifierResponseSpeedKey = "yaprflow.modifierResponseSpeed"
     private static let soundEffectsEnabledKey = "yaprflow.soundEffectsEnabled"
     private static let soundEffectsVolumeKey = "yaprflow.soundEffectsVolume"
     private static let startSoundNameKey = "yaprflow.startSoundName"
@@ -174,6 +200,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Applies only to modifier-only hold-to-talk. Key-based primary shortcuts
+    /// and the independent external shortcut fire through their own backends.
+    @Published var modifierResponseSpeed: ModifierResponseSpeed {
+        didSet {
+            UserDefaults.standard.set(
+                modifierResponseSpeed.rawValue,
+                forKey: Self.modifierResponseSpeedKey
+            )
+        }
+    }
+
     /// When `true`, play a short system sound on recording start and stop.
     /// Defaults to on — chimes are a small but useful signal that the mic is
     /// actually live, especially on flaky hotkeys. The specific sounds are
@@ -287,6 +324,12 @@ final class AppState: ObservableObject {
             self.bothKeyboardSides = stored
         } else {
             self.bothKeyboardSides = false
+        }
+        if let raw = UserDefaults.standard.string(forKey: Self.modifierResponseSpeedKey),
+           let stored = ModifierResponseSpeed(rawValue: raw) {
+            self.modifierResponseSpeed = stored
+        } else {
+            self.modifierResponseSpeed = .balanced
         }
         if let stored = UserDefaults.standard.object(forKey: Self.soundEffectsEnabledKey) as? Bool {
             self.soundEffectsEnabled = stored
