@@ -20,12 +20,14 @@ fi
 # We can't pass the chosen identity straight to xcodebuild because SPM packages
 # without a development team fail when CODE_SIGNING_ALLOWED=YES. Build unsigned
 # and re-sign only the final app afterwards.
-DEVELOPER_IDENTITY="${DEVELOPER_ID_APPLICATION:-17530C078CB507252BC9CB8EEAA9143310583C56}"
+DEVELOPER_IDENTITY="${DEVELOPER_ID_APPLICATION:-7562675D2DBC9FAE3122A093F4B441380D88561B}"
 LOCAL_SIGN_IDENTITY="Yaprflow Local Dev"
 SIGN_IDENTITY=""
+SIGN_TIMESTAMP=()
 
 if security find-identity -v -p codesigning 2>/dev/null | grep -Fq "$DEVELOPER_IDENTITY"; then
     SIGN_IDENTITY="$DEVELOPER_IDENTITY"
+    SIGN_TIMESTAMP=(--timestamp)
     echo "==> Building yaprflow (Release; will re-sign with the public Developer ID)…"
 elif security find-identity -v -p codesigning 2>/dev/null | grep -Fq "$LOCAL_SIGN_IDENTITY"; then
     SIGN_IDENTITY="$LOCAL_SIGN_IDENTITY"
@@ -51,16 +53,17 @@ if [ ! -d "$APP" ]; then
     exit 1
 fi
 
-# Re-sign the .app with the selected stable identity if available. Doing this
-# AFTER the build (instead of via xcodebuild) so SPM dependencies stay
-# unsigned and we only stamp our own bundle. Entitlements have to be re-
-# applied explicitly because the unsigned build doesn't embed them.
+# Re-sign only the final app so unsigned SPM products do not require a
+# development team. A secure timestamp is required for Developer ID; the
+# stable self-signed fallback intentionally omits it.
 if [ -n "$SIGN_IDENTITY" ]; then
     echo "==> Re-signing .app with '$SIGN_IDENTITY'…"
     codesign --force --deep --options runtime \
+        "${SIGN_TIMESTAMP[@]}" \
         --sign "$SIGN_IDENTITY" \
         --entitlements "$ROOT/yaprflow/yaprflow.entitlements" \
         "$APP"
+    codesign --verify --deep --strict --verbose=2 "$APP"
 fi
 
 echo "==> Quitting running yaprflow…"
@@ -80,6 +83,10 @@ echo "==> Installing to ${DEST}…"
 rm -rf "$DEST"
 cp -R "$APP" "$DEST"
 xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
+
+if [ -n "$SIGN_IDENTITY" ]; then
+    codesign --verify --deep --strict --verbose=2 "$DEST"
+fi
 
 echo "==> Launching…"
 open "$DEST"

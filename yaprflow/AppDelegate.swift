@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private var statusItem: NSStatusItem?
     private var cleanupModeMenu: NSMenu?
     private var modifierResponseMenu: NSMenu?
+    private var numberFormattingMenu: NSMenu?
     private var startSoundPickerMenu: NSMenu?
     private var stopSoundPickerMenu: NSMenu?
     private var soundsMenuItem: NSMenuItem?
@@ -503,6 +504,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         }
     }
 
+    private func buildNumberFormattingMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem.sectionHeader(
+            title: "Say “digits…” for an exact number sequence"
+        ))
+        for mode in NumberFormattingMode.allCases {
+            let item = NSMenuItem(
+                title: mode.displayName,
+                action: #selector(selectNumberFormattingMode(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = mode.rawValue
+            item.toolTip = switch mode {
+            case .natural: "Leaves number words alone unless you explicitly say “digits”."
+            case .smart: "Formats clear quantities and labeled sequences while keeping small prose numbers natural."
+            case .preferDigits: "Converts valid spoken-number phrases more broadly."
+            }
+            menu.addItem(item)
+        }
+        numberFormattingMenu = menu
+        refreshNumberFormattingCheckmarks()
+        return menu
+    }
+
+    @objc private func selectNumberFormattingMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = NumberFormattingMode(rawValue: raw) else { return }
+        AppState.shared.numberFormattingMode = mode
+        refreshNumberFormattingCheckmarks()
+    }
+
+    private func refreshNumberFormattingCheckmarks() {
+        let current = AppState.shared.numberFormattingMode
+        numberFormattingMenu?.items.forEach { item in
+            let mode = (item.representedObject as? String)
+                .flatMap(NumberFormattingMode.init(rawValue:))
+            item.state = mode == current ? .on : .off
+        }
+    }
+
     @objc private func selectCleanupMode(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let mode = CleanupMode(rawValue: raw) else { return }
@@ -538,6 +580,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         responseItem.submenu = buildModifierResponseMenu()
         responseItem.toolTip = "Changes how long a modifier-only shortcut must be held before dictation starts."
         submenu.addItem(responseItem)
+
+        let numberItem = NSMenuItem(
+            title: "Number Formatting",
+            action: nil,
+            keyEquivalent: ""
+        )
+        numberItem.image = NSImage(
+            systemSymbolName: "number",
+            accessibilityDescription: nil
+        )
+        numberItem.submenu = buildNumberFormattingMenu()
+        numberItem.toolTip = "Controls when spoken number words become digits."
+        submenu.addItem(numberItem)
 
         submenu.addItem(NSMenuItem.separator())
 

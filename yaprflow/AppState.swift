@@ -74,6 +74,7 @@ final class AppState: ObservableObject {
     private static let keyboardShortcutEnabledKey = "yaprflow.keyboardShortcutEnabled"
     private static let bothKeyboardSidesKey = "yaprflow.bothKeyboardSides"
     private static let modifierResponseSpeedKey = "yaprflow.modifierResponseSpeed"
+    private static let numberFormattingModeKey = "yaprflow.numberFormattingMode"
     private static let soundEffectsEnabledKey = "yaprflow.soundEffectsEnabled"
     private static let soundEffectsVolumeKey = "yaprflow.soundEffectsVolume"
     private static let startSoundNameKey = "yaprflow.startSoundName"
@@ -211,6 +212,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Controls deterministic spoken-number conversion after cleanup and
+    /// before delivery. The explicit "digits" cue works in every mode.
+    @Published var numberFormattingMode: NumberFormattingMode {
+        didSet {
+            UserDefaults.standard.set(
+                numberFormattingMode.rawValue,
+                forKey: Self.numberFormattingModeKey
+            )
+        }
+    }
+
     /// When `true`, play a short system sound on recording start and stop.
     /// Defaults to on — chimes are a small but useful signal that the mic is
     /// actually live, especially on flaky hotkeys. The specific sounds are
@@ -330,6 +342,12 @@ final class AppState: ObservableObject {
             self.modifierResponseSpeed = stored
         } else {
             self.modifierResponseSpeed = .balanced
+        }
+        if let raw = UserDefaults.standard.string(forKey: Self.numberFormattingModeKey),
+           let stored = NumberFormattingMode(rawValue: raw) {
+            self.numberFormattingMode = stored
+        } else {
+            self.numberFormattingMode = .smart
         }
         if let stored = UserDefaults.standard.object(forKey: Self.soundEffectsEnabledKey) as? Bool {
             self.soundEffectsEnabled = stored

@@ -85,7 +85,7 @@ fi
 
 APPLE_TEAM_ID="${APPLE_TEAM_ID:-QFHS76RR9M}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-notary-yaprflow-mw}"
-CODESIGN_IDENTITY="${DEVELOPER_ID_APPLICATION:-17530C078CB507252BC9CB8EEAA9143310583C56}"
+CODESIGN_IDENTITY="${DEVELOPER_ID_APPLICATION:-7562675D2DBC9FAE3122A093F4B441380D88561B}"
 GH_REPO="${GH_REPO:-M1w234/yaprflow-mw}"
 
 read_marketing_version() {
@@ -118,6 +118,9 @@ TAG="v$VERSION"
 
 echo "==> Running correction learning tests"
 scripts/test-correction-learning.sh
+
+echo "==> Running spoken number formatting tests"
+scripts/test-spoken-number-formatter.sh
 
 # ---- Decide whether to sign + notarize ---------------------------------------
 

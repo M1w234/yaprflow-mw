@@ -521,6 +521,11 @@ final class TranscriptionController {
             let autoPasteEnabled = state.autoPasteMode
             let shadowComparisonEnabled = state.comparisonLogMode
             let screenContextEnabled = state.screenContextMode
+            let numberFormattingMode = state.numberFormattingMode
+            let formattedOriginal = SpokenNumberFormatter.apply(
+                finalText,
+                mode: numberFormattingMode
+            )
 
             switch state.cleanupMode {
             case .polish:
@@ -534,7 +539,7 @@ final class TranscriptionController {
                 if !autoPasteEnabled && !shadowComparisonEnabled {
                     let pb = NSPasteboard.general
                     pb.clearContents()
-                    pb.setString(finalText, forType: .string)
+                    pb.setString(formattedOriginal, forType: .string)
                 }
 
                 state.status = .correcting("Improving grammar…")
@@ -572,10 +577,14 @@ final class TranscriptionController {
                             log.info("Dropping stale grammar correction (newer session in flight)")
                             return
                         }
-                        self.state.liveTranscript = corrected
-                        self.state.lastTranscript = corrected
-                        self.deliverTranscript(
+                        let formatted = SpokenNumberFormatter.apply(
                             corrected,
+                            mode: numberFormattingMode
+                        )
+                        self.state.liveTranscript = formatted
+                        self.state.lastTranscript = formatted
+                        self.deliverTranscript(
+                            formatted,
                             sessionID: sessionID,
                             targetPID: targetPID,
                             autoPasteEnabled: autoPasteEnabled,
@@ -592,7 +601,7 @@ final class TranscriptionController {
                         // install where the model download failed (network,
                         // 404 release tag, etc.) and silent fallback would
                         // let it go undetected forever.
-                        self.state.lastTranscript = finalText
+                        self.state.lastTranscript = formattedOriginal
                         self.state.status = .error("Grammar unavailable — used original")
                         self.scheduleAutoHide(after: 3.0)
 
@@ -602,7 +611,7 @@ final class TranscriptionController {
                         // delivering uncorrected text. updateStatus false so
                         // the error above stays visible.
                         self.deliverTranscript(
-                            finalText,
+                            formattedOriginal,
                             sessionID: sessionID,
                             targetPID: targetPID,
                             autoPasteEnabled: autoPasteEnabled,
@@ -615,10 +624,14 @@ final class TranscriptionController {
                 // Light mode is synchronous and deterministic: no model load,
                 // no paraphrasing, and no async correction latency.
                 let cleaned = LightCleanup.apply(finalText)
-                state.liveTranscript = cleaned
-                state.lastTranscript = cleaned
-                deliverTranscript(
+                let formatted = SpokenNumberFormatter.apply(
                     cleaned,
+                    mode: numberFormattingMode
+                )
+                state.liveTranscript = formatted
+                state.lastTranscript = formatted
+                deliverTranscript(
+                    formatted,
                     sessionID: sessionID,
                     targetPID: targetPID,
                     autoPasteEnabled: autoPasteEnabled,
@@ -627,9 +640,9 @@ final class TranscriptionController {
                 scheduleAutoHide(after: 0.3)
 
             case .off:
-                state.lastTranscript = finalText
+                state.lastTranscript = formattedOriginal
                 deliverTranscript(
-                    finalText,
+                    formattedOriginal,
                     sessionID: sessionID,
                     targetPID: targetPID,
                     autoPasteEnabled: autoPasteEnabled,
