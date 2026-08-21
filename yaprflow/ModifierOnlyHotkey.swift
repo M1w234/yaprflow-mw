@@ -115,9 +115,15 @@ final class ModifierOnlyHotkey {
     /// the single biggest contributor to "I granted it and it still says it
     /// needs permission".
     private var retryTask: Task<Void, Never>?
-    /// The system AX prompt + overlay error should fire once per launch,
-    /// not on every retry tick.
-    private var didShowPermissionGuidance = false
+    private enum PermissionGuidance: Hashable {
+        case accessibility
+        case inputMonitoring
+    }
+
+    /// Each system prompt + overlay error should fire once per launch, not on
+    /// every retry tick. Keep the two grants separate so fixing Accessibility
+    /// can reveal and explain a stale Input Monitoring entry afterwards.
+    private var shownPermissionGuidance: Set<PermissionGuidance> = []
 
     private init() {}
 
@@ -181,6 +187,25 @@ final class ModifierOnlyHotkey {
     private func installTapIfNeeded() {
         guard tap == nil else { return }
 
+        let permissionStatus = ModifierHotkeyListenerStatus.evaluate(
+            hasAccessibility: AutoPaste.hasAccessibility,
+            hasInputMonitoring: InputMonitoring.hasPermission,
+            tapCreated: false,
+            tapEnabled: false
+        )
+        switch permissionStatus {
+        case .needsAccessibility:
+            showPermissionGuidanceOnce(for: .accessibility)
+            scheduleTapRetry()
+            return
+        case .needsInputMonitoring:
+            showPermissionGuidanceOnce(for: .inputMonitoring)
+            scheduleTapRetry()
+            return
+        case .tapUnavailable, .tapDisabled, .ready:
+            break
+        }
+
         let mask: CGEventMask =
             (1 << CGEventType.flagsChanged.rawValue) |
             (1 << CGEventType.keyDown.rawValue) |
@@ -203,14 +228,7 @@ final class ModifierOnlyHotkey {
             },
             userInfo: userInfo
         ) else {
-            log.error("CGEvent.tapCreate returned nil (Accessibility not granted?)")
-            // This is the #1 way a modifier-only hotkey silently dies:
-            // signature changes invalidate the Accessibility grant, tap
-            // creation fails, and the only evidence used to be a log line.
-            // Surface it once, then keep retrying so the hotkey comes alive
-            // within seconds of the user flipping the switch — no app
-            // restart, no re-picking the shortcut.
-            showPermissionGuidanceOnce()
+            log.error("CGEvent.tapCreate returned nil despite both privacy grants")
             scheduleTapRetry()
             return
         }
@@ -218,15 +236,41 @@ final class ModifierOnlyHotkey {
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
+
+        let listenerStatus = ModifierHotkeyListenerStatus.evaluate(
+            hasAccessibility: AutoPaste.hasAccessibility,
+            hasInputMonitoring: InputMonitoring.hasPermission,
+            tapCreated: true,
+            tapEnabled: CGEvent.tapIsEnabled(tap: port)
+        )
+        guard listenerStatus == .ready else {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            CFMachPortInvalidate(port)
+            log.error("Modifier-only event tap was created but is not enabled")
+            showPermissionGuidanceOnce(for: .inputMonitoring)
+            scheduleTapRetry()
+            return
+        }
+
         self.tap = port
         self.runLoopSource = source
+        log.info("Modifier-only hotkey listener is live")
     }
 
-    private func showPermissionGuidanceOnce() {
-        guard !didShowPermissionGuidance else { return }
-        didShowPermissionGuidance = true
-        AutoPaste.promptForAccessibility()
-        AppState.shared.status = .error("Hotkey needs Accessibility — grant yaprflow in System Settings")
+    private func showPermissionGuidanceOnce(for guidance: PermissionGuidance) {
+        guard shownPermissionGuidance.insert(guidance).inserted else { return }
+
+        let message: String
+        switch guidance {
+        case .accessibility:
+            AutoPaste.promptForAccessibility()
+            message = "Hotkey needs Accessibility — grant yaprflow in System Settings"
+        case .inputMonitoring:
+            InputMonitoring.requestPermission()
+            message = "Hotkey needs Input Monitoring — re-add yaprflow if it is already listed"
+        }
+
+        AppState.shared.status = .error(message)
         NotchOverlayWindowController.shared.show()
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(6))
@@ -237,8 +281,8 @@ final class ModifierOnlyHotkey {
         }
     }
 
-    /// Poll for Accessibility trust and install the tap the moment it
-    /// appears. Bounded (~5 min) so a permanently-denied state doesn't poll
+    /// Poll both independent privacy grants and install the tap the moment they
+    /// are valid. Bounded (~5 min) so a permanently-denied state does not poll
     /// forever; re-picking the shortcut or relaunching restarts the loop.
     private func scheduleTapRetry() {
         guard retryTask == nil else { return }
@@ -248,9 +292,10 @@ final class ModifierOnlyHotkey {
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled, desiredMask != 0, tap == nil else { return }
                 guard AutoPaste.hasAccessibility else { continue }
+                guard InputMonitoring.hasPermission else { continue }
                 installTapIfNeeded()
                 if tap != nil {
-                    log.info("Accessibility granted — modifier-only hotkey is now live")
+                    log.info("Required permissions granted — modifier-only hotkey is now live")
                     if case .error = AppState.shared.status {
                         AppState.shared.status = .idle
                         NotchOverlayWindowController.shared.hide()
@@ -258,7 +303,7 @@ final class ModifierOnlyHotkey {
                     return
                 }
             }
-            log.error("Tap retry loop exhausted without Accessibility trust")
+            log.error("Tap retry loop exhausted without a live modifier-only listener")
         }
     }
 
@@ -275,11 +320,29 @@ final class ModifierOnlyHotkey {
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                 if let port = self.tap {
                     CGEvent.tapEnable(tap: port, enable: true)
+                    if !CGEvent.tapIsEnabled(tap: port) {
+                        self.recoverDisabledTap()
+                    }
                 }
                 return
             }
             self.process(flagsRaw: flagsRaw, isKeyDown: type == .keyDown, type: type)
         }
+    }
+
+    private func recoverDisabledTap() {
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            runLoopSource = nil
+        }
+        if let tap {
+            CFMachPortInvalidate(tap)
+            self.tap = nil
+        }
+        resetState()
+        log.error("Modifier-only event tap could not be re-enabled")
+        showPermissionGuidanceOnce(for: .inputMonitoring)
+        scheduleTapRetry()
     }
 
     private func process(flagsRaw: UInt64, isKeyDown: Bool, type: CGEventType) {

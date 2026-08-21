@@ -5,9 +5,9 @@ import Carbon.HIToolbox
 /// Accessibility permission helpers for clipboard-free text insertion.
 @MainActor
 enum AutoPaste {
-    /// Re-checked on every call; TCC entries can be revoked at any time and
-    /// ad-hoc signed builds (every `dev-build.sh` iteration) get a fresh code
-    /// directory hash, which typically invalidates the existing AX grant.
+    /// Re-checked on every call because TCC entries can be revoked at any time.
+    /// `dev-build.sh` prefers the same Developer ID used by public releases so
+    /// normal local-to-public updates do not replace this code identity.
     static var hasAccessibility: Bool {
         AXIsProcessTrusted()
     }

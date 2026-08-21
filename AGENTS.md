@@ -43,7 +43,8 @@ open /Applications/yaprflow.app
 - **Sandboxed** (`yaprflow/yaprflow.entitlements`): app-sandbox + audio-input + network.client. Affects what hotkey APIs are usable.
 - **Hotkeys**: key-based shortcuts use Carbon `RegisterEventHotKey` via
   `GlobalHotkey.swift`. Modifier-only shortcuts use a listen-only `CGEventTap`
-  in `ModifierOnlyHotkey.swift` and require Accessibility permission.
+  in `ModifierOnlyHotkey.swift` and require both Accessibility and Input
+  Monitoring permission.
 - **Synchronized file groups**: `yaprflow.xcodeproj` uses Xcode 16 `PBXFileSystemSynchronizedRootGroup` — new `.swift` files in `yaprflow/` are auto-picked-up by the project. No `.pbxproj` editing.
 - **Speech pipeline**: `TranscriptionController` → `AudioCapture` → VAD (`FluidAudio`) → Parakeet ASR (MLX/CoreML mlmodelc bundles in `Models/`). Final text → clipboard.
 - **Grammar mode (optional)**: `GrammarController` runs a small MLX LLM on the transcript before pasting.
@@ -69,7 +70,8 @@ open /Applications/yaprflow.app
 Modifier-only hold and double-tap are implemented. Preserve these invariants
 when changing them:
 
-- Require Accessibility and retry event-tap installation after the user grants it.
+- Require Accessibility and Input Monitoring, distinguish their guidance, and
+  retry event-tap installation after the user grants them.
 - Ignore a tap when any non-modifier keyDown or extra modifier intervenes.
 - Preserve side-aware matching so ordinary shortcuts on the other keyboard side
   do not trigger dictation.

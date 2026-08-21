@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Local dev build + install. Ad-hoc signed, replaces /Applications/yaprflow.app,
-# strips Gatekeeper quarantine, relaunches. For when you're iterating on source.
-# For a Developer ID release build, use scripts/release.sh instead.
+# Local dev build + install. Prefers the same Developer ID identity used by
+# public releases so replacing /Applications/yaprflow.app does not create stale
+# Accessibility or Input Monitoring entries. Falls back to the stable local
+# identity (or ad-hoc) when the release identity is unavailable.
 
 set -euo pipefail
 
@@ -16,19 +17,23 @@ if [ ! -d "$ROOT/Models/parakeet-tdt-0.6b-v2/Encoder.mlmodelc" ]; then
     exit 1
 fi
 
-# Detect whether the local self-signed identity is set up. We can't pass it
-# straight to xcodebuild — SPM packages without a development team blow up
-# when CODE_SIGNING_ALLOWED=YES. Instead we build everything unsigned (same
-# as before) and re-sign just the final .app afterwards with `codesign`,
-# which only touches our bundle.
+# We can't pass the chosen identity straight to xcodebuild because SPM packages
+# without a development team fail when CODE_SIGNING_ALLOWED=YES. Build unsigned
+# and re-sign only the final app afterwards.
+DEVELOPER_IDENTITY="${DEVELOPER_ID_APPLICATION:-17530C078CB507252BC9CB8EEAA9143310583C56}"
 LOCAL_SIGN_IDENTITY="Yaprflow Local Dev"
-HAS_LOCAL_SIGN_IDENTITY=false
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$LOCAL_SIGN_IDENTITY"; then
-    HAS_LOCAL_SIGN_IDENTITY=true
-    echo "==> Building yaprflow (Release; will re-sign with '$LOCAL_SIGN_IDENTITY')…"
+SIGN_IDENTITY=""
+
+if security find-identity -v -p codesigning 2>/dev/null | grep -Fq "$DEVELOPER_IDENTITY"; then
+    SIGN_IDENTITY="$DEVELOPER_IDENTITY"
+    echo "==> Building yaprflow (Release; will re-sign with the public Developer ID)…"
+elif security find-identity -v -p codesigning 2>/dev/null | grep -Fq "$LOCAL_SIGN_IDENTITY"; then
+    SIGN_IDENTITY="$LOCAL_SIGN_IDENTITY"
+    echo "==> Building yaprflow (Release; public identity unavailable, using '$LOCAL_SIGN_IDENTITY')…"
+    echo "    Switching back to a public build will require repairing macOS privacy entries once."
 else
     echo "==> Building yaprflow (Release, ad-hoc)…"
-    echo "    Run ./scripts/setup-local-signing.sh once to get stable AX permissions."
+    echo "    Rebuilds may invalidate Accessibility and Input Monitoring permissions."
 fi
 
 xcodebuild \
@@ -46,14 +51,14 @@ if [ ! -d "$APP" ]; then
     exit 1
 fi
 
-# Re-sign the .app with the stable local identity if available. Doing this
+# Re-sign the .app with the selected stable identity if available. Doing this
 # AFTER the build (instead of via xcodebuild) so SPM dependencies stay
 # unsigned and we only stamp our own bundle. Entitlements have to be re-
 # applied explicitly because the unsigned build doesn't embed them.
-if [ "$HAS_LOCAL_SIGN_IDENTITY" = true ]; then
-    echo "==> Re-signing .app with '$LOCAL_SIGN_IDENTITY'…"
+if [ -n "$SIGN_IDENTITY" ]; then
+    echo "==> Re-signing .app with '$SIGN_IDENTITY'…"
     codesign --force --deep --options runtime \
-        --sign "$LOCAL_SIGN_IDENTITY" \
+        --sign "$SIGN_IDENTITY" \
         --entitlements "$ROOT/yaprflow/yaprflow.entitlements" \
         "$APP"
 fi
