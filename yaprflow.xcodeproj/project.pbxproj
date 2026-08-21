@@ -19,9 +19,22 @@
 		AFA2BC972F97E6F00048D99B /* yaprflow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = yaprflow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5A4E2E522FA1000000A11CE0 /* Exceptions for "yaprflow" folder in "yaprflow" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AFA2BC962F97E6F00048D99B /* yaprflow */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AFA2BC992F97E6F00048D99B /* yaprflow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5A4E2E522FA1000000A11CE0 /* Exceptions for "yaprflow" folder in "yaprflow" target */,
+			);
 			path = yaprflow;
 			sourceTree = "<group>";
 		};
