@@ -16,6 +16,9 @@ Download the `.dmg` from the
 it, and drag **yaprflow** to **Applications**. Then continue at Step 2 below for
 the one-time macOS permissions.
 
+Version 3.3.4 and newer check for signed updates automatically. To check
+manually, open the Yaprflow menu and choose **Check for Updates…**.
+
 ## Install it with Claude Code (or Codex)
 
 Open Claude Code (or Codex) anywhere, and say:

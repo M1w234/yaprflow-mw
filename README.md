@@ -39,6 +39,10 @@ Download the `.dmg`, open it, and drag **yaprflow** to Applications. The speech
 model is already bundled, and the app is signed and notarized by Apple.
 [SETUP.md](SETUP.md) has the complete permission walkthrough.
 
+Starting with version 3.3.4, Yaprflow checks for signed updates automatically
+and notifies you when a new release is available. Choose **Check for Updates…**
+from the menu-bar app whenever you want to check manually.
+
 **Requires an Apple-silicon Mac (M1 or newer) running macOS 14 Sonoma or later.**
 
 ### Build from source

@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Sparkle
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -14,6 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private var soundsMenuItem: NSMenuItem?
     private var statusIconCancellable: AnyCancellable?
     private var cleanupModeCancellable: AnyCancellable?
+    private lazy var updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -295,6 +301,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         )
         setupItem.toolTip = "Reopen the first-run guide for permissions and the default shortcut."
         menu.addItem(setupItem)
+
+        let updateItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
+        updateItem.image = NSImage(
+            systemSymbolName: "arrow.triangle.2.circlepath",
+            accessibilityDescription: "Check for Yaprflow updates"
+        )
+        updateItem.target = updaterController
+        updateItem.toolTip = "Check for a newer signed Yaprflow release. Updates are also checked automatically in the background."
+        menu.addItem(updateItem)
+
+        menu.addItem(NSMenuItem.separator())
 
         menu.addItem(NSMenuItem(
             title: "Quit",

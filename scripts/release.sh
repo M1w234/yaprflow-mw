@@ -112,6 +112,7 @@ DMG_NAME="$APP_NAME"
 DMG_PATH="$BUILD_DIR/$DMG_NAME.dmg"
 TEMP_DMG="$BUILD_DIR/$DMG_NAME.tmp.dmg"
 APP_ZIP="$BUILD_DIR/$APP_NAME-$VERSION.zip"
+APPCAST_PATH="$BUILD_DIR/appcast.xml"
 TAG="v$VERSION"
 
 # ---- Release tests ----------------------------------------------------------
@@ -415,6 +416,15 @@ ls -lh "$DMG_PATH"
 # ---- Publish to GitHub Releases ---------------------------------------------
 
 if [[ "$PUBLISH" == true ]]; then
+    APPCAST_NOTES="$NOTES"
+    if [[ -z "$APPCAST_NOTES" ]]; then
+        PREVIOUS_TAG="$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
+        if [[ -n "$PREVIOUS_TAG" ]]; then
+            APPCAST_NOTES="$(git log --format='- %s' "$PREVIOUS_TAG"..HEAD)"
+        fi
+    fi
+    scripts/generate-appcast.sh "$DMG_PATH" "$VERSION" "$APPCAST_PATH" "$APPCAST_NOTES"
+
     echo
     if git rev-parse "$TAG" >/dev/null 2>&1; then
         echo "==> Tag $TAG already exists locally — skipping create"
@@ -430,14 +440,14 @@ if [[ "$PUBLISH" == true ]]; then
     fi
 
     if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-        echo "==> Release $TAG exists — replacing DMG asset"
-        gh release upload "$TAG" "$DMG_PATH" --clobber --repo "$GH_REPO"
+        echo "==> Release $TAG exists — replacing DMG and appcast assets"
+        gh release upload "$TAG" "$DMG_PATH" "$APPCAST_PATH" --clobber --repo "$GH_REPO"
         if [[ -n "$NOTES" ]]; then
             gh release edit "$TAG" --notes "$NOTES" --repo "$GH_REPO"
         fi
     else
         echo "==> Creating GitHub release"
-        RELEASE_ARGS=("$TAG" "$DMG_PATH" --repo "$GH_REPO" --title "yaprflow $VERSION")
+        RELEASE_ARGS=("$TAG" "$DMG_PATH" "$APPCAST_PATH" --repo "$GH_REPO" --title "yaprflow $VERSION")
         if [[ -n "$NOTES" ]]; then
             RELEASE_ARGS+=(--notes "$NOTES")
         else

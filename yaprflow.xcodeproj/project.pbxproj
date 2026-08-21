@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0B0395C516E1474CB72199FBAD4D957C /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1448D962472A4F5F934E79127342E0A7 /* MLXLLM */; };
 		503EF7FBEACF40F2A0C1E72EDC371FF1 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = CA3CFA89799945AD9144A38DAA185B62 /* HuggingFace */; };
+		5A4E2E4F2FA1000000A11CE0 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5A4E2E512FA1000000A11CE0 /* Sparkle */; };
 		AFA2BCB22F97E6F00048D99B /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = AFA2BCB12F97E6F00048D99B /* FluidAudio */; };
 		C1BCF94423984EAE8EC70E77A8DC317 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 926005BF412042D79D280EB2577380E9 /* MLXLMCommon */; };
 		EEA41191C01E4A8AA186F91416C6FCB8 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 8D39FE45C6204DB7AA2248431F7EB830 /* Tokenizers */; };
@@ -32,6 +33,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AFA2BCB22F97E6F00048D99B /* FluidAudio in Frameworks */,
+				5A4E2E4F2FA1000000A11CE0 /* Sparkle in Frameworks */,
 				0B0395C516E1474CB72199FBAD4D957C /* MLXLLM in Frameworks */,
 				C1BCF94423984EAE8EC70E77A8DC317 /* MLXLMCommon in Frameworks */,
 				503EF7FBEACF40F2A0C1E72EDC371FF1 /* HuggingFace in Frameworks */,
@@ -80,6 +82,7 @@
 			name = yaprflow;
 			packageProductDependencies = (
 				AFA2BCB12F97E6F00048D99B /* FluidAudio */,
+				5A4E2E512FA1000000A11CE0 /* Sparkle */,
 				1448D962472A4F5F934E79127342E0A7 /* MLXLLM */,
 				926005BF412042D79D280EB2577380E9 /* MLXLMCommon */,
 				CA3CFA89799945AD9144A38DAA185B62 /* HuggingFace */,
@@ -115,6 +118,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AFA2BCB02F97E6F00048D99B /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				5A4E2E502FA1000000A11CE0 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				09E89398BCA04F6691BA93F1E680EC48 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				B4CCC6855A514A8EA08AE0EEDA594791 /* XCRemoteSwiftPackageReference "swift-huggingface" */,
 				9053E14180234838912C765DC2778018 /* XCRemoteSwiftPackageReference "swift-transformers" */,
@@ -307,11 +311,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Yaprflow needs the microphone to transcribe your voice into text.";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = yaprflow/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -343,11 +344,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Yaprflow needs the microphone to transcribe your voice into text.";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = yaprflow/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -389,6 +387,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5A4E2E502FA1000000A11CE0 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.6;
+			};
+		};
 		09E89398BCA04F6691BA93F1E680EC48 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
@@ -424,6 +430,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		5A4E2E512FA1000000A11CE0 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A4E2E502FA1000000A11CE0 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		1448D962472A4F5F934E79127342E0A7 /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 09E89398BCA04F6691BA93F1E680EC48 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
