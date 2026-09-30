@@ -28,6 +28,15 @@ internal static class UiSmoke
                 image.Render(app.Window);
                 var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image));
                 using var file = File.Create(Path.Combine(outputDirectory, name + ".png")); encoder.Save(file);
+                if (name == "settings" && Find<ScrollViewer>(tabs) is { } scroll)
+                {
+                    scroll.ScrollToEnd(); app.Window.UpdateLayout();
+                    await app.Window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+                    var bottom = new RenderTargetBitmap((int)app.Window.ActualWidth, (int)app.Window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                    bottom.Render(app.Window);
+                    var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bottom));
+                    using var bottomFile = File.Create(Path.Combine(outputDirectory, "settings-bottom.png")); png.Save(bottomFile);
+                }
             }
             await File.WriteAllTextAsync(Path.Combine(outputDirectory, "ui-smoke.json"), JsonSerializer.Serialize(new
             { passed = true, platform = Environment.OSVersion.ToString(), shortcutRegistered = app.HasShortcut, tabs = counts }, new JsonSerializerOptions { WriteIndented = true }));

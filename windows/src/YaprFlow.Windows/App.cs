@@ -158,10 +158,11 @@ internal sealed class AppController : IDisposable
         var phase = Session.Phase;
         if (phase != previousPhase)
         {
+            if (phase == SessionPhase.Preparing && !hotkeys.SetEscape(true))
+                SetNotice("Escape is in use by another app. Use Cancel on the recording pill or tray menu.");
             if (phase == SessionPhase.Listening)
             {
                 recordingTime.Restart();
-                if (!hotkeys.SetEscape(true)) SetNotice("Escape is in use by another app. Use Cancel on the recording pill or tray menu.");
                 if (Settings.Sounds) System.Media.SystemSounds.Asterisk.Play();
             }
             if (phase == SessionPhase.Idle)

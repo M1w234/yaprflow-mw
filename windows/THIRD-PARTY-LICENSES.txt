@@ -1,5 +1,3 @@
-
-
 NAudio
 Source: https://raw.githubusercontent.com/naudio/NAudio/master/license.txt
 
