@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Windows.Interop;
+using System.Runtime.InteropServices;
 
 namespace YaprFlow.Windows;
 
@@ -38,8 +40,33 @@ internal static class UiSmoke
                     using var bottomFile = File.Create(Path.Combine(outputDirectory, "settings-bottom.png")); png.Save(bottomFile);
                 }
             }
+            // Exercise real Win32 registration and rollback, not just mocks.
+            var original = app.Settings;
+            var hwnd = new WindowInteropHelper(app.Window).Handle;
+            const int conflictId = 9000;
+            if (!Native.RegisterHotKey(hwnd, conflictId, 3 | 0x4000, 0x86))
+                throw new InvalidOperationException("Could not reserve the conflict-test shortcut.");
+            try
+            {
+                if (app.SaveSettings(original with { Primary = new Shortcut(3, 0x86) }) || app.Settings != original || !app.HasShortcut)
+                    throw new InvalidOperationException("Conflicting shortcut did not preserve the previous binding.");
+            }
+            finally { Native.UnregisterHotKey(hwnd, conflictId); }
+            if (!app.SaveSettings(original with { External = new Shortcut(0, 0x87, TriggerMode.Toggle) }) ||
+                !app.SaveSettings(original) || !app.HasShortcut)
+                throw new InvalidOperationException("Independent external shortcut lifecycle failed.");
+            if (Marshal.SizeOf<Native.INPUT>() != 40) throw new InvalidOperationException("Wrong x64 INPUT layout.");
+            var delivery = new TextDelivery();
+            app.Window.Activate();
+            if (await delivery.CaptureTargetAsync() is not null)
+                throw new InvalidOperationException("The app must not target its own settings window.");
+            var withheld = await delivery.DeliverAsync("must not be sent", null, CancellationToken.None);
+            if (!withheld.StartsWith("Not inserted", StringComparison.Ordinal))
+                throw new InvalidOperationException("Unknown target was not rejected.");
             await File.WriteAllTextAsync(Path.Combine(outputDirectory, "ui-smoke.json"), JsonSerializer.Serialize(new
-            { passed = true, platform = Environment.OSVersion.ToString(), shortcutRegistered = app.HasShortcut, tabs = counts }, new JsonSerializerOptions { WriteIndented = true }));
+            { passed = true, platform = Environment.OSVersion.ToString(), shortcutRegistered = app.HasShortcut,
+                conflictRollback = true, externalShortcutLifecycle = true, unsafeTargetRejected = true, inputStructBytes = 40,
+                tabs = counts }, new JsonSerializerOptions { WriteIndented = true }));
             Application.Current.Shutdown(0);
         }
         catch (Exception ex)
