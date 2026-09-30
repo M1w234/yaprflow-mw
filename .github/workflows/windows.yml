@@ -1,0 +1,71 @@
+name: Windows companion
+on:
+  push:
+    paths: ['windows/**', '.github/workflows/windows.yml']
+  pull_request:
+    paths: ['windows/**', '.github/workflows/windows.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build, test and package preview
+        shell: pwsh
+        run: ./windows/scripts/build.ps1 -Installer
+      - name: Native Windows UI smoke and captures
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:GITHUB_WORKSPACE 'windows/artifacts/ui-smoke'
+          $process = Start-Process 'windows/artifacts/publish/yaprflow.exe' -ArgumentList @('--smoke-ui', $output) -PassThru
+          if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'UI smoke timed out.' }
+          if ($process.ExitCode -ne 0) { throw "UI smoke failed: $($process.ExitCode)" }
+          if (-not (Test-Path "$output/ui-smoke.json")) { throw 'UI smoke receipt missing.' }
+          Get-Content "$output/ui-smoke.json"
+      - name: Real Parakeet model on Windows CPU
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'parakeet.tar.bz2'
+          $model = Join-Path $env:RUNNER_TEMP 'parakeet-installed'
+          $sampleRoot = Join-Path $env:RUNNER_TEMP 'sample'
+          New-Item -ItemType Directory -Force $sampleRoot | Out-Null
+          Invoke-WebRequest 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad') { throw 'Model checksum mismatch.' }
+          tar -xjf $archive -C $sampleRoot 'sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/test_wavs/0.wav'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not extract upstream sample.' }
+          $sample = Join-Path $sampleRoot 'sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/test_wavs/0.wav'
+          $result = dotnet run --project windows/tools/YaprFlow.Smoke -c Release -- $model $sample --archive $archive
+          if ($LASTEXITCODE -ne 0) { throw 'Windows inference failed.' }
+          $result | Set-Content windows/artifacts/model-smoke.json
+          $receipt = $result | ConvertFrom-Json
+          if ($receipt.text -notmatch 'old portrait') { throw 'Unexpected recognition result.' }
+          $result
+      - name: Install and uninstall preview
+        shell: pwsh
+        run: |
+          $setup = Start-Process 'windows/artifacts/yaprflow-0.1.0-windows-x64-preview-setup.exe' -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw 'Installer failed.' }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs/yaprflow/yaprflow.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed executable missing.' }
+          $uninstall = Start-Process (Join-Path $env:LOCALAPPDATA 'Programs/yaprflow/unins000.exe') -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0 -or (Test-Path $exe)) { throw 'Uninstall failed.' }
+      - name: Upload preview and verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yaprflow-windows-preview
+          path: |
+            windows/artifacts/*-setup.exe
+            windows/artifacts/*.zip
+            windows/artifacts/SHA256SUMS.txt
+            windows/artifacts/model-smoke.json
+            windows/artifacts/ui-smoke/**
+            windows/tests/**/TestResults/*.trx
+          if-no-files-found: error
+          retention-days: 14
