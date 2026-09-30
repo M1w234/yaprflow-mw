@@ -17,11 +17,11 @@ internal sealed class MainWindow : Window
     private readonly StackPanel settingsForm = new();
     private readonly ListBox history = new() { MinHeight = 160, DisplayMemberPath = nameof(HistoryRow.Label) };
     private readonly TextBox transcript = new() { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, AcceptsReturn = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MinHeight = 110 };
-    private readonly TextBox search = new();
+    private readonly TextBox search = new() { MinHeight = 32, Padding = new Thickness(6) };
     private readonly TextBlock historyState = Text("");
     private readonly ListBox vocabulary = new() { MinHeight = 170, DisplayMemberPath = nameof(VocabularyRow.Label) };
-    private readonly TextBox heard = new();
-    private readonly TextBox replacement = new();
+    private readonly TextBox heard = new() { MinHeight = 32, Padding = new Thickness(6) };
+    private readonly TextBox replacement = new() { MinHeight = 32, Padding = new Thickness(6) };
     private readonly Button saveRule;
     private readonly ShortcutEditor primary;
     private readonly ShortcutEditor external;
@@ -33,6 +33,8 @@ internal sealed class MainWindow : Window
     public MainWindow(AppController controller)
     {
         app = controller; Title = "yaprflow · Windows companion"; Width = 780; Height = 800; MinWidth = 600; MinHeight = 570;
+        Resources.MergedDictionaries.Add(new ResourceDictionary
+        { Source = new Uri("pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml") });
         FontFamily = new FontFamily("Segoe UI"); FontSize = 14; Background = SystemColors.WindowBrush; Foreground = SystemColors.WindowTextBrush;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var root = new DockPanel { Margin = new Thickness(24) };

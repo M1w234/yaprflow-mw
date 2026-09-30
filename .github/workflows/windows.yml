@@ -8,6 +8,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   windows:
     runs-on: windows-2025
