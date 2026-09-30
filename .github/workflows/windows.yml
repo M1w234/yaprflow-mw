@@ -1,6 +1,7 @@
 name: Windows companion
 on:
   push:
+    branches: [main]
     paths: ['windows/**', '.github/workflows/windows.yml']
   pull_request:
     paths: ['windows/**', '.github/workflows/windows.yml']

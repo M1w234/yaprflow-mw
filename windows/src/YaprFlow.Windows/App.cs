@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using YaprFlow.Speech;
 using Forms = System.Windows.Forms;
 
@@ -124,6 +125,19 @@ internal sealed class AppController : IDisposable
             }
         };
         timer.Start();
+        SystemEvents.SessionSwitch += OnSessionSwitch;
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        Changed?.Invoke();
+    }
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason is SessionSwitchReason.SessionLock or SessionSwitchReason.SessionLogoff)
+            Application.Current.Dispatcher.BeginInvoke(async () => await Session.CancelAsync());
+    }
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Suspend)
+            Application.Current.Dispatcher.BeginInvoke(async () => await Session.CancelAsync());
     }
     public void Show() { Window.Show(); Window.Activate(); }
     public void SetNotice(string message) { Notice = message; Changed?.Invoke(); }
@@ -247,6 +261,8 @@ internal sealed class AppController : IDisposable
     }
     public void Dispose()
     {
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         timer.Stop(); hotkeys.Dispose(); tray.Visible = false; tray.Dispose(); overlay.Close();
         if (!Session.IsBusy && !ModelBusy) recognizer.Dispose();
     }

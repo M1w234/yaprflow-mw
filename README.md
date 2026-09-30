@@ -20,6 +20,10 @@ A personal fork of [tmoreton/yaprflow](https://github.com/tmoreton/yaprflow) wit
 
 ## Install
 
+**Windows companion:** a native Windows 11 x64 preview is available as source
+and CI build artifacts. See [Windows setup, features, and preview limitations](windows/README.md).
+The Mac release below remains the established edition.
+
 The easiest path is the notarized disk image on the
 [latest GitHub Release](https://github.com/M1w234/yaprflow-mw/releases/latest).
 Download the `.dmg`, open it, and drag **yaprflow** to Applications. The speech

@@ -53,7 +53,7 @@ internal sealed class TextDelivery : ITextDelivery
         var current = await ReadTargetAsync();
         token.ThrowIfCancellationRequested();
         if (current is null || current.Window != original.Window || current.ProcessId != original.ProcessId ||
-            !current.RuntimeId.SequenceEqual(original.RuntimeId) || Native.GetForegroundWindow() != original.Window)
+            !current.RuntimeId.SequenceEqual(original.RuntimeId) || Native.GetForegroundWindow() != original.Window || Native.AnyModifierDown)
             return "Not inserted — the focused field changed; copy from History";
         var inputs = new Native.INPUT[text.Length * 2];
         for (var i = 0; i < text.Length; i++)
