@@ -172,7 +172,9 @@ internal sealed class MainWindow : Window
         settingsForm.IsEnabled = !app.ModelBusy && !app.Session.IsBusy;
         notice.Text = app.Notice;
         sessionStatus.Text = !app.HasShortcut ? "No shortcut available — choose another combination in Settings"
-            : app.Session.IsBusy ? app.Session.Status : app.Settings.Primary.Label + " · " + app.Settings.Primary.Mode + " to talk · " + app.Session.Status;
+            : app.Session.IsBusy ? app.Session.Status
+            : !app.ModelReady ? (app.ModelBusy ? "Preparing the speech model…" : "Download or repair the speech model to enable dictation")
+            : app.Settings.Primary.Label + " · " + app.Settings.Primary.Mode + " to talk · " + app.Session.Status;
         var h = string.Join(',', app.History.Select(e => e.Id));
         if (h != lastHistory) { lastHistory = h; RefreshHistory(); }
         else if (app.History.Count == 0) RefreshHistory();
