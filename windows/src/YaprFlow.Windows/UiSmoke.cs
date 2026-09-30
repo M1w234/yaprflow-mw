@@ -63,9 +63,24 @@ internal static class UiSmoke
             var withheld = await delivery.DeliverAsync("must not be sent", null, CancellationToken.None);
             if (!withheld.StartsWith("Not inserted", StringComparison.Ordinal))
                 throw new InvalidOperationException("Unknown target was not rejected.");
+            var foreground = Native.GetForegroundWindow();
+            var overlay = new OverlayWindow(() => { }, () => { });
+            try
+            {
+                overlay.Update(SessionPhase.Listening, "Listening…"); overlay.SetLevel(.15f); overlay.SetTime(TimeSpan.FromSeconds(7));
+                await overlay.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+                if (Native.GetForegroundWindow() != foreground)
+                    throw new InvalidOperationException("Recording overlay stole foreground focus.");
+                var bitmap = new RenderTargetBitmap((int)overlay.ActualWidth, (int)overlay.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(overlay);
+                var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
+                using var imageFile = File.Create(Path.Combine(outputDirectory, "recording-overlay.png")); png.Save(imageFile);
+            }
+            finally { overlay.Close(); }
             await File.WriteAllTextAsync(Path.Combine(outputDirectory, "ui-smoke.json"), JsonSerializer.Serialize(new
             { passed = true, platform = Environment.OSVersion.ToString(), shortcutRegistered = app.HasShortcut,
-                conflictRollback = true, externalShortcutLifecycle = true, unsafeTargetRejected = true, inputStructBytes = 40,
+                conflictRollback = true, externalShortcutLifecycle = true, unsafeTargetRejected = true,
+                overlayPreservesFocus = true, inputStructBytes = 40,
                 tabs = counts }, new JsonSerializerOptions { WriteIndented = true }));
             Application.Current.Shutdown(0);
         }
