@@ -15,6 +15,7 @@ Before offering beyond a preview test group:
 - Escape, on-screen Cancel, tray Cancel and Finish all work; ten-minute stop works. Test sleep/resume and screen lock during recording.
 - History search/copy/delete/clear work. Turning history off stops future disk writes of transcripts; quitting removes in-memory-only result. Existing saved history can still be explicitly cleared.
 - Vocabulary does not replace inside longer names and does not cascade replacements. Test apostrophes, Hawaiian names, punctuation and case.
+- Launch with Windows app mode set to both Light and Dark; Settings labels, buttons, tabs and dropdowns remain readable.
 - Keyboard navigation and Narrator labels work. Check 100%, 150%, 200% display scaling, high contrast, multiple monitors, small laptop window and tray overflow.
 - Time cold startup and final-text latency for 5-, 30-, and 120-second dictations on at least an ordinary Intel and AMD laptop; include quiet and noisy audio. Compare transcript quality with the Mac app on the same recordings.
 

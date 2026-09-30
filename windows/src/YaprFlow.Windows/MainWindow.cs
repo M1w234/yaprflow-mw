@@ -33,8 +33,9 @@ internal sealed class MainWindow : Window
     public MainWindow(AppController controller)
     {
         app = controller; Title = "yaprflow · Windows companion"; Width = 780; Height = 800; MinWidth = 600; MinHeight = 570;
+        // Match the light window surface even when Windows app mode is dark.
         Resources.MergedDictionaries.Add(new ResourceDictionary
-        { Source = new Uri("pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml") });
+        { Source = new Uri("pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.Light.xaml") });
         FontFamily = new FontFamily("Segoe UI"); FontSize = 14; Background = SystemColors.WindowBrush; Foreground = SystemColors.WindowTextBrush;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var root = new DockPanel { Margin = new Thickness(24) };
