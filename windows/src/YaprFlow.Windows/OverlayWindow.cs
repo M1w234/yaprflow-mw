@@ -15,8 +15,10 @@ internal sealed class OverlayWindow : Window
         Background = Brushes.Transparent; Topmost = true; ShowInTaskbar = false; ShowActivated = false;
         ResizeMode = ResizeMode.NoResize; Title = "yaprflow recording";
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        cancel = new Button { Content = "Cancel", Margin = new Thickness(4), Padding = new Thickness(9, 6, 9, 6) };
-        finish = new Button { Content = "Finish", Margin = new Thickness(4), Padding = new Thickness(9, 6, 9, 6) };
+        // Mouse actions must not move keyboard focus out of the target field.
+        // Keyboard equivalents remain Escape, the dictation shortcut, and tray commands.
+        cancel = new Button { Content = "Cancel", Focusable = false, Margin = new Thickness(4), Padding = new Thickness(9, 6, 9, 6) };
+        finish = new Button { Content = "Finish", Focusable = false, Margin = new Thickness(4), Padding = new Thickness(9, 6, 9, 6) };
         cancel.Click += (_, _) => onCancel(); finish.Click += (_, _) => onFinish();
         row.Children.Add(cancel); row.Children.Add(level); row.Children.Add(status); row.Children.Add(time); row.Children.Add(finish);
         Content = new Border { Background = Brush("#182322"), CornerRadius = new CornerRadius(22), Padding = new Thickness(12), Child = row, Margin = new Thickness(4) };
