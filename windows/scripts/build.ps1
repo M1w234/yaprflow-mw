@@ -1,8 +1,43 @@
 param(
     [switch]$Installer,
-    [string]$CertificateThumbprint = ""
+    [string]$CertificateThumbprint = "",
+    [switch]$RequireSigning,
+    [string]$ArtifactSigningMetadata = "",
+    [string]$ArtifactSigningDlib = "",
+    [string]$SignToolPath = "signtool.exe"
 )
 $ErrorActionPreference = 'Stop'
+# Fail before touching existing artifacts when release signing is incomplete.
+$cloudSigning = $ArtifactSigningMetadata -ne "" -or $ArtifactSigningDlib -ne ""
+$signing = $CertificateThumbprint -ne "" -or $cloudSigning
+if ($RequireSigning -and -not $signing) { throw 'Release signing is required. Supply a certificate thumbprint or an Artifact Signing metadata/Dlib pair.' }
+if ($CertificateThumbprint -and $cloudSigning) { throw 'Choose one signing provider, not both.' }
+if ($cloudSigning -and (-not $ArtifactSigningMetadata -or -not $ArtifactSigningDlib)) { throw 'Artifact Signing requires both metadata and the x64 Dlib path.' }
+if ($signing) {
+    $SignToolPath = (Get-Command $SignToolPath -ErrorAction Stop).Source
+    if ($cloudSigning) {
+        $ArtifactSigningMetadata = (Resolve-Path $ArtifactSigningMetadata -ErrorAction Stop).Path
+        $ArtifactSigningDlib = (Resolve-Path $ArtifactSigningDlib -ErrorAction Stop).Path
+        $metadata = Get-Content $ArtifactSigningMetadata -Raw | ConvertFrom-Json
+        if (-not $metadata.Endpoint -or -not $metadata.CodeSigningAccountName -or -not $metadata.CertificateProfileName) {
+            throw 'Artifact Signing metadata must name the endpoint, signing account and certificate profile.'
+        }
+    }
+}
+function Protect-Artifact([string]$Path) {
+    if ($cloudSigning) {
+        & $SignToolPath sign /v /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib $ArtifactSigningDlib /dmdf $ArtifactSigningMetadata $Path
+    } else {
+        & $SignToolPath sign /sha1 $CertificateThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $Path
+    }
+    if ($LASTEXITCODE -ne 0) { throw "Signing failed: $Path" }
+    & $SignToolPath verify /pa /all /v $Path
+    if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $Path" }
+    $signature = Get-AuthenticodeSignature $Path
+    if ($signature.Status -ne 'Valid' -or -not $signature.TimeStamperCertificate) {
+        throw "A trusted, timestamped signature is required: $Path"
+    }
+}
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
@@ -17,9 +52,11 @@ try {
     foreach ($required in @('yaprflow.exe', 'sherpa-onnx-c-api.dll', 'onnxruntime.dll')) {
         if (-not (Test-Path (Join-Path $publish $required))) { throw "Publish is missing $required" }
     }
-    if ($CertificateThumbprint) {
-        & signtool sign /sha1 $CertificateThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 (Join-Path $publish 'yaprflow.exe')
-        if ($LASTEXITCODE -ne 0) { throw 'Application signing failed.' }
+    if ($signing) {
+        # Sign our managed assemblies as well as the executable before packaging.
+        foreach ($file in (Get-ChildItem $publish -File | Where-Object { $_.Name -eq 'yaprflow.exe' -or $_.Name -eq 'yaprflow.dll' -or $_.Name -like 'YaprFlow.*.dll' })) {
+            Protect-Artifact $file.FullName
+        }
     }
     $zip = Join-Path $root 'artifacts/yaprflow-0.2.1-windows-x64-preview.zip'
     Compress-Archive -Path "$publish/*" -DestinationPath $zip -Force
@@ -28,9 +65,8 @@ try {
         if (-not (Test-Path $compiler)) { throw 'Install Inno Setup 6 to build the setup executable.' }
         & $compiler (Join-Path $root 'installer/yaprflow.iss')
         if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
-        if ($CertificateThumbprint) {
-            & signtool sign /sha1 $CertificateThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 (Join-Path $root 'artifacts/yaprflow-0.2.1-windows-x64-preview-setup.exe')
-            if ($LASTEXITCODE -ne 0) { throw 'Installer signing failed.' }
+        if ($signing) {
+            Protect-Artifact (Join-Path $root 'artifacts/yaprflow-0.2.1-windows-x64-preview-setup.exe')
         }
     }
     Get-ChildItem (Join-Path $root 'artifacts') -File | Where-Object { $_.Extension -in '.exe', '.zip' } |

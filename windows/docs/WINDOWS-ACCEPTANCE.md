@@ -21,6 +21,11 @@ Before offering beyond a preview test group:
 
 Known limitations must be listed with the preview. Do not mark a row passed based only on a successful compile or unit test.
 
+## Recorded 0.2.1 acceptance
+
+- September 30, 2026: Michael accepted the revised interface and sound cues on the existing AMD Windows 11 test PC.
+- This confirms visual and listening acceptance only. Streaming, cancellation, microphone reconnect, offline relaunch and the other hardware checks remain pending unless separately recorded.
+
 ## Preview 0.2.0 additions
 
 - Streaming with tap-to-toggle: phrases arrive at pauses, with no duplication at final stop. Change focus mid-stream and verify later phrases are withheld. Cancel after one insertion and verify nothing further arrives. Hold modifier keys and confirm text queues until release.

@@ -33,7 +33,7 @@ Unsigned preview builds may receive Windows reputation warnings. A signed, hardw
 - With streaming off, recognition completes after release. Long audio uses bounded chunks, preferring quiet boundaries; this needs testing on continuous speech and noisy microphones.
 - Some applications expose no safely identifiable editable field. Insertion is withheld there. Administrator/elevated applications may also reject synthetic input. Recover the transcript manually; yaprflow does not elevate itself, press Enter, or automatically resend.
 - Input dispatch is best-effort: a successful Windows `SendInput` call confirms dispatch, not that the receiving app accepted the text. Check the field before retrying.
-- The UI currently offers a microphone list from startup. Restart yaprflow after adding or removing devices if the list is stale.
+- The microphone list refreshes automatically. Selected-device reconnect and input-loss recovery still require physical hardware acceptance.
 - Windows ARM64, Windows 10, and older PCs are not validated. Minimum practical RAM/CPU guidance awaits hardware testing; no latency guarantee is made.
 - No automatic updates yet. A newer installer upgrades the same per-user location.
 
@@ -52,8 +52,10 @@ Install the .NET 10 SDK. From PowerShell at the repository root:
 # Also create an installer (requires Inno Setup 6):
 ./windows/scripts/build.ps1 -Installer
 # Optional Windows code-signing certificate already in your certificate store:
-./windows/scripts/build.ps1 -Installer -CertificateThumbprint YOUR_THUMBPRINT
+./windows/scripts/build.ps1 -Installer -RequireSigning -CertificateThumbprint YOUR_THUMBPRINT
 ```
+
+See [publisher signing](docs/WINDOWS-SIGNING.md) for cloud signing, verification and prerequisites. Public candidates must use `-RequireSigning`.
 
 Artifacts appear under `windows/artifacts/`. The script runs behavior tests, publishes a self-contained x64 app, checks native DLLs, and creates a portable zip. CI also exercises native window rendering, model installation and real inference, and installer/uninstaller execution. CI never publishes a GitHub release.
 

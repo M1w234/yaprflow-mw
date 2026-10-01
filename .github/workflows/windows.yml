@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Reject incomplete release signing
+        shell: pwsh
+        run: ./windows/scripts/test-signing-preflight.ps1
       - name: Build, test and package preview
         shell: pwsh
         run: ./windows/scripts/build.ps1 -Installer
