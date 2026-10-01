@@ -4,7 +4,9 @@ Mode: Operate. Aesthetic: Japandi utility, using a native Windows shell. Warm ne
 
 ## Reference decision, September 30
 
-Mobbin was requested and attempted in Chrome at https://mobbin.com/browse/web/apps. It redirected to a logged-out landing page; no library screens were used. The user was offered sign-in while work continued.
+Mobbin was requested and attempted in Chrome at https://mobbin.com/browse/web/apps. The initial MCP client needed OAuth reauthorization. Reconnected successfully with `codex mcp login mobbin`; the callable search tool then returned “Mobbin MCP requires a paid plan.” The user then signed into the browser library, which provided access to screens; MCP continued returning its plan gate even after another authorization refresh. No plan change was made.
+
+Mobbin cross-check: [Linear notifications](https://mobbin.com/screens/a0ffb988-a36b-4f3a-b4f6-b14310088981), actually viewed after browser sign-in, supports grouped setting rows, label/help hierarchy and right-aligned toggles. [Front notifications](https://mobbin.com/screens/3e800980-2838-4ce2-a5ba-95994c99c3ee) was reviewed but its multicolumn controls and side help panel were rejected as too complex for this utility. Raycast remains the structural backbone; Linear reinforces the row treatment.
 
 Structural backbone: the account and launcher settings screenshots actually viewed on https://manual.raycast.com/settings. Borrow the persistent quiet sidebar, grouped preference rows, right-aligned controls and restrained help hierarchy. Do not copy its branding, account flow, dark palette, or AI-provider complexity. This is a focused refinement of the existing seven-tab Windows app, not a new product flow.
 

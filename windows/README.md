@@ -1,6 +1,6 @@
 # yaprflow for Windows
 
-A Windows companion to the native Mac app. **Preview 0.2.0 — Windows 11 on Intel/AMD x64.**
+A Windows companion to the native Mac app. **Preview 0.2.1 — Windows 11 on Intel/AMD x64.**
 Uses local Parakeet TDT 0.6B v2 through sherpa-onnx. No account, Python installation, NVIDIA GPU, or separate .NET installation is required for the packaged app.
 
 ## Get started
@@ -30,7 +30,7 @@ Unsigned preview builds may receive Windows reputation warnings. A signed, hardw
 ## Intentional preview limits
 
 - Preview 0.2.0 adds streaming at speech pauses, side-specific modifier gestures/double-tap lock, optional local AI Polish, and reviewed correction suggestions. Screen context, summarization, and automatic application of learned corrections are not included.
-- Recognition completes after release. Long audio uses bounded chunks, preferring quiet boundaries; this needs testing on continuous speech and noisy microphones.
+- With streaming off, recognition completes after release. Long audio uses bounded chunks, preferring quiet boundaries; this needs testing on continuous speech and noisy microphones.
 - Some applications expose no safely identifiable editable field. Insertion is withheld there. Administrator/elevated applications may also reject synthetic input. Recover the transcript manually; yaprflow does not elevate itself, press Enter, or automatically resend.
 - Input dispatch is best-effort: a successful Windows `SendInput` call confirms dispatch, not that the receiving app accepted the text. Check the field before retrying.
 - The UI currently offers a microphone list from startup. Restart yaprflow after adding or removing devices if the list is stale.
@@ -93,3 +93,9 @@ Choose tap-to-toggle in **Shortcuts** for direct streaming. Completed phrases ar
 **Sound** supports quiet original cues, independent volume, and custom WAV imports. **Dictation** refreshes microphones automatically and remembers the selected device across reconnects. **Shortcuts** adds optional left/right Ctrl+Shift hold and double-tap lock.
 
 This preview needs hardware acceptance before public release. See docs/RELEASE-READINESS.md for evidence and remaining gates.
+
+## Preview 0.2.1
+
+A quieter sound palette and a refined native settings interface. In **Sound**, choose **Soft**, **Wood**, **Glass**, or the original **Classic**, then use **Preview start** and **Preview stop**. Soft is the new default; volume, disabled sounds and imported WAVs are preserved. Imports override the selected style until **Use selected style** is chosen for that cue.
+
+Settings now use a persistent sidebar, grouped switch rows and clearer help. The recording panel fits the draft instead of reserving empty space. Native keyboard navigation, high-contrast settings, and nonactivating recording controls remain in place.

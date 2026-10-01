@@ -56,11 +56,11 @@
     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
       <Border x:Name="Chrome" Background="Transparent" CornerRadius="6" Padding="14,11" BorderThickness="1" BorderBrush="Transparent">
-        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
+        <ContentPresenter x:Name="Header" ContentSource="Header" RecognizesAccessKey="True"/>
       </Border>
       <ControlTemplate.Triggers>
         <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#E6ECE5"/></Trigger>
-        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{StaticResource Selected}"/><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger>
+        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{StaticResource Selected}"/><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter TargetName="Header" Property="TextElement.FontWeight" Value="SemiBold"/></Trigger>
         <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource Accent}"/></Trigger>
       </ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>

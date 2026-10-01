@@ -139,7 +139,7 @@ internal sealed class MainWindow : Window
         var presetDescription = Text("", 8, 16); sound.Children.Add(presetDescription);
         void DescribePreset() => presetDescription.Text = app.Settings.SoundPreset switch
         {
-            SoundPreset.Soft => "A gentle, rounded tap. Our quietest everyday option.",
+            SoundPreset.Soft => "A gentle, rounded tap for everyday dictation.",
             SoundPreset.Wood => "A dry, tactile knock with a quick finish.",
             SoundPreset.Glass => "A light, clear note with a little more ring.",
             _ => "The original rising and falling tones."
