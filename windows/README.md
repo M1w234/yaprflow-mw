@@ -1,6 +1,6 @@
 # yaprflow for Windows
 
-A Windows companion to the native Mac app. **Preview 0.1.0 — Windows 11 on Intel/AMD x64.**
+A Windows companion to the native Mac app. **Preview 0.1.1 — Windows 11 on Intel/AMD x64.**
 Uses local Parakeet TDT 0.6B v2 through sherpa-onnx. No account, Python installation, NVIDIA GPU, or separate .NET installation is required for the packaged app.
 
 ## Get started
@@ -19,7 +19,7 @@ Unsigned preview builds may receive Windows reputation warnings. A signed, hardw
 
 - Local CPU speech recognition with the same Parakeet v2 model family as the Mac app.
 - Configurable key-based hold/toggle shortcuts; optional independent mouse-mapped shortcut.
-- Microphone selection, start/stop sounds, nonactivating recording pill with level meter.
+- Microphone selection, soft start/stop cues with independent volume and previews, nonactivating recording pill with level meter.
 - Escape, pill and tray cancel; ten-minute recording limit; no late text insertion after cancellation.
 - Original-field checks, password-field rejection, Unicode insertion that never changes the clipboard.
 - Local history (up to 200 entries), search, explicit copy/delete, and opt-out for future history.

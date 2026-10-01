@@ -22,10 +22,13 @@ public sealed record Settings
     public bool LightCleanup { get; init; } = true;
     public bool KeepHistory { get; init; } = true;
     public bool Sounds { get; init; } = true;
+    public double SoundVolume { get; init; } = 0.35;
     public int MicrophoneDevice { get; init; } = -1;
 
     public void Validate()
     {
+        if (!double.IsFinite(SoundVolume) || SoundVolume < 0 || SoundVolume > 1)
+            throw new InvalidDataException("Sound volume must be between 0 and 100 percent.");
         if (SchemaVersion != 1 || Primary is null || !Primary.IsValid ||
             (External is not null && (!External.IsValid ||
             (External.Key == Primary.Key && External.Modifiers == Primary.Modifiers))) || MicrophoneDevice < -1)

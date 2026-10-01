@@ -51,6 +51,20 @@ public class CoreTests
         finally { Directory.Delete(root, true); }
     }
     [Fact]
+    public void OlderSettingsKeepSoundPreferenceAndGainQuietDefault()
+    {
+        var settings = System.Text.Json.JsonSerializer.Deserialize<Settings>("{\"Sounds\":false}")!;
+        settings.Validate();
+        Assert.False(settings.Sounds);
+        Assert.Equal(.35, settings.SoundVolume);
+        var changed = settings with { SoundVolume = .6 };
+        Assert.Equal(changed, System.Text.Json.JsonSerializer.Deserialize<Settings>(System.Text.Json.JsonSerializer.Serialize(changed)));
+    }
+    [Theory]
+    [InlineData(-.1)] [InlineData(1.1)] [InlineData(double.NaN)] [InlineData(double.PositiveInfinity)]
+    public void InvalidSoundVolumeRejected(double volume) => Assert.Throws<InvalidDataException>(() =>
+        new Settings { SoundVolume = volume }.Validate());
+    [Fact]
     public void LongAudioSegmentationKeepsEverySampleAndBoundsMemory()
     {
         var audio = Enumerable.Range(0, 16000 * 80).Select(n => (float)(n % 150) / 150).ToArray();

@@ -87,6 +87,23 @@ internal sealed class MainWindow : Window
         settingsForm.Children.Add(Setting("Insert text into the original field", () => app.Settings.AutomaticInsertion, v => app.Settings with { AutomaticInsertion = v }));
         settingsForm.Children.Add(Setting("Light cleanup · spacing, punctuation, repeated words", () => app.Settings.LightCleanup, v => app.Settings with { LightCleanup = v }));
         settingsForm.Children.Add(Setting("Play start and stop sounds", () => app.Settings.Sounds, v => app.Settings with { Sounds = v }));
+        var soundVolume = new Slider { Minimum = 0, Maximum = 100, Value = app.Settings.SoundVolume * 100,
+            TickFrequency = 5, IsSnapToTickEnabled = true, SmallChange = 5, LargeChange = 10, MinHeight = 32 };
+        AutomationProperties.SetName(soundVolume, "Recording sound volume");
+        var volumeLabel = Label($"Sound _volume · {soundVolume.Value:0}%", soundVolume);
+        settingsForm.Children.Add(volumeLabel); settingsForm.Children.Add(soundVolume);
+        soundVolume.ValueChanged += (_, _) =>
+        {
+            if (refreshing) return;
+            if (!app.SaveSettings(app.Settings with { SoundVolume = soundVolume.Value / 100 }))
+            { refreshing = true; soundVolume.Value = app.Settings.SoundVolume * 100; refreshing = false; }
+            volumeLabel.Content = $"Sound _volume · {soundVolume.Value:0}%";
+        };
+        var previewStart = Button("Preview start", () => app.PreviewSound(true));
+        var previewStop = Button("Preview stop", () => app.PreviewSound(false));
+        app.Changed += () => { previewStart.IsEnabled = previewStop.IsEnabled = !app.Session.IsBusy; };
+        settingsForm.Children.Add(Row(previewStart, previewStop));
+        settingsForm.Children.Add(Text("Soft recording cues. Volume affects yaprflow only. Previews play even when cues are turned off.", 0, 8));
         settingsForm.Children.Add(Setting("Save future transcripts in local History (up to 200)", () => app.Settings.KeepHistory, v => app.Settings with { KeepHistory = v }));
         settingsForm.Children.Add(Text("Turning History off keeps only the latest result in memory. Existing saved history remains until you clear it. Audio is never saved. History files contain plain text in your Windows user profile.", 0, 8));
         var startup = new CheckBox { Content = "Start yaprflow when I sign in", Margin = new Thickness(0, 10, 0, 8) };
@@ -104,7 +121,7 @@ internal sealed class MainWindow : Window
         };
         settingsForm.Children.Add(startup);
         settings.Children.Add(Row(Button("Microphone privacy settings", () => Process.Start(new ProcessStartInfo("ms-settings:privacy-microphone") { UseShellExecute = true })), Button("Open local data folder", app.OpenDataFolder)));
-        settings.Children.Add(Text("Windows 11 · x64 · Preview 0.1.0\nNo account, no cloud transcription, no telemetry. Model setup contacts GitHub. AI polish, modifier-only gestures, and automatic correction learning are planned for a later edition.", 20, 8));
+        settings.Children.Add(Text("Windows 11 · x64 · Preview 0.1.1\nNo account, no cloud transcription, no telemetry. Model setup contacts GitHub. AI polish, modifier-only gestures, and automatic correction learning are planned for a later edition.", 20, 8));
         tabs.Items.Add(new TabItem { Header = "_Settings", Content = new ScrollViewer { Content = settings, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
 
         var historyPanel = new DockPanel { Margin = new Thickness(16) };

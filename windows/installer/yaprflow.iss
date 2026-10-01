@@ -1,4 +1,4 @@
-#define AppVersion "0.1.0"
+#define AppVersion "0.1.1"
 [Setup]
 AppId={{D8556A6D-96DC-47B0-8B96-A80F932A9460}
 AppName=yaprflow

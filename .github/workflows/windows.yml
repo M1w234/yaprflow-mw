@@ -53,7 +53,7 @@ jobs:
       - name: Install and uninstall preview
         shell: pwsh
         run: |
-          $setup = Start-Process 'windows/artifacts/yaprflow-0.1.0-windows-x64-preview-setup.exe' -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          $setup = Start-Process 'windows/artifacts/yaprflow-0.1.1-windows-x64-preview-setup.exe' -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
           if ($setup.ExitCode -ne 0) { throw 'Installer failed.' }
           $exe = Join-Path $env:LOCALAPPDATA 'Programs/yaprflow/yaprflow.exe'
           if (-not (Test-Path $exe)) { throw 'Installed executable missing.' }

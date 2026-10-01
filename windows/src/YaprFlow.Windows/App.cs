@@ -48,6 +48,7 @@ internal sealed class AppController : IDisposable
 {
     private readonly JsonStore store;
     private readonly HotkeyService hotkeys = new();
+    private readonly RecordingSounds sounds = new();
     private readonly Microphone microphone;
     private readonly ParakeetRecognizer recognizer;
     private readonly Forms.NotifyIcon tray;
@@ -153,6 +154,10 @@ internal sealed class AppController : IDisposable
         holdOwner = shortcut.Mode == TriggerMode.Hold ? id : null;
         _ = Session.StartAsync();
     }
+    public void PreviewSound(bool start)
+    {
+        if (!Session.IsBusy) sounds.Play(start, Settings.SoundVolume);
+    }
     private void SessionChanged()
     {
         var phase = Session.Phase;
@@ -163,13 +168,13 @@ internal sealed class AppController : IDisposable
             if (phase == SessionPhase.Listening)
             {
                 recordingTime.Restart();
-                if (Settings.Sounds) System.Media.SystemSounds.Asterisk.Play();
+                if (Settings.Sounds) sounds.Play(true, Settings.SoundVolume);
             }
             if (phase == SessionPhase.Idle)
             {
                 holdOwner = null; recordingTime.Stop(); hotkeys.SetEscape(false);
             }
-            if (previousPhase == SessionPhase.Listening && Settings.Sounds) System.Media.SystemSounds.Beep.Play();
+            if (previousPhase == SessionPhase.Listening && Settings.Sounds) sounds.Play(false, Settings.SoundVolume);
             previousPhase = phase;
         }
         overlay.Update(phase, Session.Status);
@@ -264,6 +269,7 @@ internal sealed class AppController : IDisposable
     {
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        sounds.Dispose();
         timer.Stop(); hotkeys.Dispose(); tray.Visible = false; tray.Dispose(); overlay.Close();
         if (!Session.IsBusy && !ModelBusy) recognizer.Dispose();
     }
