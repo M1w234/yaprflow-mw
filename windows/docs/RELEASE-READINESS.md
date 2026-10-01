@@ -1,6 +1,11 @@
 # Windows parity and release readiness
 
-Updated September 30, 2026. Preview 0.2.0 is a private candidate; no public release is authorized by this work.
+Updated September 30, 2026. Preview 0.2.1 is a private candidate; no public release is authorized by this work.
+
+## Implemented in 0.2.1
+
+- Refined native sidebar, setting switches, help hierarchy and compact recording panel.
+- Soft, Wood and Glass original sound pairs plus Classic, independent cue preview and existing WAV overrides. New cues have rounded attacks/tails and lower level; sound-off, volume and custom imports are preserved.
 
 ## Implemented in 0.2.0
 
@@ -14,8 +19,10 @@ Updated September 30, 2026. Preview 0.2.0 is a private candidate; no public rele
 
 ## Evidence
 
+- Current 0.2.1 at `8f9121d` passed [Windows CI](https://github.com/M1w234/yaprflow-mw/actions/runs/36838662515): 55 behavior tests, all seven native sections, all sound presets/assets, compact layout and overlay focus checks, real Parakeet and Qwen inference, installer/uninstaller. Screenshots reviewed. Installer exit 0 on the AMD PC; version 0.2.1.0, preferences/history/speech marker hashes preserved, optional Polish model present. Dictation and Sound windows visually confirmed through RustDesk, and remote navigation to Sound worked. New Soft preset defaults without changing 35% volume, sound enabled state, tap-to-toggle or other existing preferences. Speaker listening and new feature hardware acceptance remain pending.
+
 - Prior 0.1.1 passed CI, installer upgrade preserving settings/history/model, and Michael's physical microphone dictation/browser insertion/quit-relaunch tests.
-- Current 0.2.0 at fe6f416 passed [Windows CI](https://github.com/M1w234/yaprflow-mw/actions/runs/36819840085): all 54 behavior tests, native UI/shortcut checks, real speech and Polish inference, installer/uninstaller. Rendered screenshots were reviewed. Installed version 0.2.0.0 is running on the AMD PC; installer preserved settings/history and the existing speech model. Streaming is configured with tap-to-toggle. Optional Polish model is downloaded and verified; Polish remains off. The new app window has not yet been visually confirmed on that desktop because automated RustDesk input did not reliably act on Windows.
+- Previous 0.2.0 at fe6f416 passed [Windows CI](https://github.com/M1w234/yaprflow-mw/actions/runs/36819840085): all 54 behavior tests, native UI/shortcut checks, real speech and Polish inference, installer/uninstaller. Rendered screenshots were reviewed. Installed version 0.2.0.0 is running on the AMD PC; installer preserved settings/history and the existing speech model. Streaming is configured with tap-to-toggle. Optional Polish model is downloaded and verified; Polish remains off. The new app window has not yet been visually confirmed on that desktop because automated RustDesk input did not reliably act on Windows.
 - Microphone reconnect, streaming while speaking, modifier lock, custom sound listening, correction observation and AI Polish latency need a physical PC acceptance pass after upgrade.
 - Remote SSH/RustDesk reconnection after reboot passed previously; pre-login access remains unobserved. Remote access is test infrastructure, never a customer requirement.
 
