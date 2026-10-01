@@ -33,6 +33,7 @@ internal sealed class App : Application
             MainWindow = controller.Window;
             if (smokeDirectory is not null) { _ = UiSmoke.RunAsync(controller, smokeDirectory); return; }
             if (!e.Args.Contains("--background") || !controller.Installer.IsInstalled) controller.Show();
+            controller.StartDeskling();
             _ = controller.WarmupAsync();
         }
         catch (Exception ex)
@@ -69,6 +70,30 @@ internal sealed class AppController : IDisposable
     private SessionPhase previousPhase;
     private CancellationTokenSource? download;
     private bool exiting;
+    private readonly CancellationTokenSource desklingCancellation = new();
+    private readonly System.Net.Http.HttpClient desklingHttp = new(new System.Net.Http.HttpClientHandler
+        { UseProxy = false, AllowAutoRedirect = false })
+        { Timeout = TimeSpan.FromSeconds(1), MaxResponseContentBufferSize = 4096 };
+    private bool remoteRecording;
+    private bool desktopLocked;
+    public void StartDeskling()
+    {
+        var bridge = new DesklingBridge(desklingHttp, () => !ModelReady || ModelBusy || desktopLocked ? "error" : Session.Phase switch
+        {
+            SessionPhase.Preparing => "preparing", SessionPhase.Listening => "listening",
+            SessionPhase.Transcribing or SessionPhase.Canceling => "processing", _ => "idle"
+        }, RemoteCommand, () => { if (remoteRecording) { remoteRecording = false; _ = Session.CancelAsync(); } });
+        _ = bridge.RunAsync(desklingCancellation.Token);
+    }
+    private void RemoteCommand(string command)
+    {
+        if (exiting || desktopLocked) return;
+        if (command == "cancel") { remoteRecording = false; _ = Session.CancelAsync(); return; }
+        if (command == "stop" || command == "toggle_lock" && Session.IsBusy)
+        { _ = Session.FinishAsync(); return; }
+        if ((command is "start" or "toggle_lock") && ModelReady && !ModelBusy && !Session.IsBusy)
+        { holdOwner = null; remoteRecording = true; _ = Session.StartAsync(); }
+    }
     public Settings Settings { get; private set; }
     public List<HistoryEntry> History { get; private set; }
     public List<VocabularyRule> Vocabulary { get; private set; }
@@ -173,6 +198,7 @@ internal sealed class AppController : IDisposable
     }
     private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
     {
+        desktopLocked = e.Reason is not SessionSwitchReason.SessionUnlock and not SessionSwitchReason.SessionLogon;
         if (e.Reason is SessionSwitchReason.SessionLock or SessionSwitchReason.SessionLogoff)
             Application.Current.Dispatcher.BeginInvoke(async () => await Session.CancelAsync());
     }
@@ -224,7 +250,7 @@ internal sealed class AppController : IDisposable
             }
             if (phase == SessionPhase.Idle)
             {
-                holdOwner = null; gestures.Reset(); recordingTime.Stop(); hotkeys.SetEscape(false);
+                remoteRecording = false; holdOwner = null; gestures.Reset(); recordingTime.Stop(); hotkeys.SetEscape(false);
             }
             if (previousPhase == SessionPhase.Listening && Settings.Sounds) sounds.Play(false, Settings.SoundVolume, Settings.SoundPreset, Settings.StopSoundPath);
             previousPhase = phase;
@@ -348,6 +374,7 @@ internal sealed class AppController : IDisposable
     {
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        desklingCancellation.Cancel(); desklingHttp.Dispose();
         corrections.Dispose(); sounds.Dispose();
         timer.Stop(); gestures.Dispose(); hotkeys.Dispose(); tray.Visible = false; tray.Dispose(); overlay.Close();
         if (!Session.IsBusy && !ModelBusy) { recognizer.Dispose(); polisher.Dispose(); }

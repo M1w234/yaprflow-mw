@@ -1,6 +1,6 @@
 # Windows parity and release readiness
 
-Updated September 30, 2026. Preview 0.2.1 is a private candidate; no public release is authorized by this work.
+Updated October 1, 2026. Preview 0.2.2 is an integrated Deskling candidate; physical acceptance remains outstanding.
 
 ## Implemented in 0.2.1
 
@@ -26,11 +26,15 @@ Updated September 30, 2026. Preview 0.2.1 is a private candidate; no public rele
 - Microphone reconnect, streaming while speaking, modifier lock, custom sound listening, correction observation and AI Polish latency need a physical PC acceptance pass after upgrade.
 - Remote SSH/RustDesk reconnection after reboot passed previously; pre-login access remains unobserved. Remote access is test infrastructure, never a customer requirement.
 
-## Signing preparation
+## Signing and Deskling integration
 
-- Installed 0.2.1 signature: NotSigned. No code-signing certificate found in the Windows user or machine stores.
-- Build supports a certificate thumbprint or Microsoft Artifact Signing, mandatory-signing mode, trusted signature verification and timestamp checks. Four invalid-configuration refusal tests passed on the Windows PC; successful signing is untested until publisher credentials are provisioned.
-- See [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md) for prerequisites, commands, cost/identity approval and remaining packaging checks.
+October 1, 2026: 0.2.2 adds a loopback-only Deskling client for Start, Stop, Cancel and toggle recording. Only coarse state is published. Commands are acknowledged once; reconnect rotates the client token so stale work is discarded. A lost relay cancels a recording started through the screen. The existing target-field, cancellation and recording-duration protections remain in use.
+
+Submit remains unavailable (`canSubmit=false`) because Windows does not implement the Mac one-shot insertion receipt. No synthesized Enter is sent. Streaming is optional and is not a bundle release gate per Michael's instruction.
+
+The signed 0.2.2 app, own assemblies, installer and generated uninstaller passed Windows trust and timestamp verification with publisher Michael Wong. All 64 behavior tests and the installed interactive UI smoke passed. The upgrade preserved existing data. The preceding 0.2.1 signing-source CI also completed successfully.
+
+`windows/scripts/bundle-deskling.py` creates a separate integrated Windows gift candidate from an existing Deskling Windows recipient package and the signed installer. It adds Windows installer signature/hash validation and connection checking without changing firmware or the original Deskling package. Physical screen acceptance is separate from software relay testing.
 
 ## Before public release
 

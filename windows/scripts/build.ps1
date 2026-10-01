@@ -60,7 +60,7 @@ try {
             Protect-Artifact $file.FullName
         }
     }
-    $zip = Join-Path $root 'artifacts/yaprflow-0.2.1-windows-x64-preview.zip'
+    $zip = Join-Path $root 'artifacts/yaprflow-0.2.2-windows-x64-preview.zip'
     Compress-Archive -Path "$publish/*" -DestinationPath $zip -Force
     if ($Installer) {
         $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
@@ -78,7 +78,7 @@ try {
         & $compiler @compilerArguments (Join-Path $root 'installer/yaprflow.iss')
         if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
         if ($signing) {
-            & $signHelper -Path (Join-Path $root 'artifacts/yaprflow-0.2.1-windows-x64-preview-setup.exe') -VerifyOnly @signArguments
+            & $signHelper -Path (Join-Path $root 'artifacts/yaprflow-0.2.2-windows-x64-preview-setup.exe') -VerifyOnly @signArguments
         }
     }
     Get-ChildItem (Join-Path $root 'artifacts') -File | Where-Object { $_.Extension -in '.exe', '.zip' } |

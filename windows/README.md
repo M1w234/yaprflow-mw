@@ -101,3 +101,9 @@ This preview needs hardware acceptance before public release. See docs/RELEASE-R
 A quieter sound palette and a refined native settings interface. In **Sound**, choose **Soft**, **Wood**, **Glass**, or the original **Classic**, then use **Preview start** and **Preview stop**. Soft is the new default; volume, disabled sounds and imported WAVs are preserved. Imports override the selected style until **Use selected style** is chosen for that cue.
 
 Settings now use a persistent sidebar, grouped switch rows and clearer help. The recording panel fits the draft instead of reserving empty space. Native keyboard navigation, high-contrast settings, and nonactivating recording controls remain in place.
+
+## Deskling screen controls (0.2.2)
+
+Keep the paired Deskling companion and yaprflow open. The Windows app connects outbound to the companion on `127.0.0.1:8737`; no new firewall port is opened by yaprflow. The screen can start, stop, toggle and cancel recording. Audio and transcripts remain in yaprflow. Submit stays disabled on Windows; review and send text yourself. Streaming is optional. A relay outage cancels a recording started through the screen.
+
+Build a recipient candidate with `python windows/scripts/bundle-deskling.py --base <existing-Windows-Deskling-package> --installer <verified-signed-setup.exe> --output <new-output-folder>`. The output must not exist. Verify the final archive on Windows and complete physical pairing/button acceptance before gifting.
