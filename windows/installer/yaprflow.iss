@@ -1,5 +1,9 @@
 #define AppVersion "0.2.1"
 [Setup]
+#ifdef SigningEnabled
+SignTool=yaprflow
+SignedUninstaller=yes
+#endif
 AppId={{D8556A6D-96DC-47B0-8B96-A80F932A9460}
 AppName=yaprflow
 AppVersion={#AppVersion}

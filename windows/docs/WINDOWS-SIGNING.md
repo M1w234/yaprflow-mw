@@ -1,6 +1,6 @@
 # Windows publisher signing
 
-Status, September 30, 2026: the installed 0.2.1 preview is unsigned. The AMD test PC has no code-signing certificate in its user or machine certificate stores. Signing support is prepared, but no successful publisher signing has been performed. Do not publish an artifact based only on preflight tests.
+Status, October 1, 2026: the 0.2.1 Windows preview has been signed and timestamped through Microsoft Artifact Signing with the verified Michael Wong publisher identity. Windows verified the app, own assemblies, setup and generated uninstaller. The signed upgrade preserved existing settings, history and downloaded models, and all 55 behavior tests and the interactive desktop UI checks passed. Physical microphone acceptance and verification through the final download channel remain release gates.
 
 ## Choose an existing certificate or Microsoft Artifact Signing
 
@@ -12,7 +12,7 @@ Microsoft Artifact Signing (formerly Trusted Signing) is the cloud alternative. 
 - [Account and identity setup](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart)
 - [Supported signing integrations and prerequisites](https://learn.microsoft.com/en-us/azure/artifact-signing/how-to-signing-integrations)
 
-Creating paid resources and selecting the public publisher identity require Michael's approval. No Azure resource has been created by this change.
+The signing account and public publisher identity were approved by Michael. Credentials and identity documents remain outside the repository. Billing cleanup is pending final candidate acceptance; do not mistake successful signing for cancellation of the paid service.
 
 ## Prepare a Windows signing host
 
@@ -45,7 +45,7 @@ From the repository root, use one provider:
   -SignToolPath 'C:\path\to\x64\signtool.exe'
 ```
 
-The script signs yaprflow.exe, yaprflow.dll and YaprFlow assemblies before packaging, then signs the setup executable. Each signature must pass SignTool verification and Windows Authenticode validation and include a timestamp. Signing errors stop the build. A timestamp is especially important for Artifact Signing's short-lived certificates. Dependencies retain their upstream signatures or unsigned status. The generated Inno uninstaller is not separately signed by this script; verify and address that before final public packaging.
+The script signs yaprflow.exe, yaprflow.dll and YaprFlow assemblies before packaging, then signs the setup executable. Each signature must pass SignTool verification and Windows Authenticode validation and include a timestamp. Signing errors stop the build. A timestamp is especially important for Artifact Signing's short-lived certificates. Dependencies retain their upstream signatures or unsigned status. Signed builds configure Inno Setup to sign both setup and the generated uninstaller through the same fail-closed signing helper. The helper verifies trust and timestamp after each signature. Unsigned previews keep the existing packaging path.
 
 Unsigned private CI previews remain supported by omitting signing arguments. `-RequireSigning` is mandatory for a public candidate. Artifact names intentionally still say preview; adding a signature does not authorize a public release.
 

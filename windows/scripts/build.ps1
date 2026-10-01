@@ -24,19 +24,21 @@ if ($signing) {
         }
     }
 }
+$signHelper = Join-Path $PSScriptRoot 'sign-artifact.ps1'
+$signArguments = @{ SignToolPath = $SignToolPath }
+if ($cloudSigning) {
+    $signArguments.ArtifactSigningMetadata = $ArtifactSigningMetadata
+    $signArguments.ArtifactSigningDlib = $ArtifactSigningDlib
+} elseif ($CertificateThumbprint) {
+    $signArguments.CertificateThumbprint = $CertificateThumbprint
+}
 function Protect-Artifact([string]$Path) {
-    if ($cloudSigning) {
-        & $SignToolPath sign /v /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib $ArtifactSigningDlib /dmdf $ArtifactSigningMetadata $Path
-    } else {
-        & $SignToolPath sign /sha1 $CertificateThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $Path
-    }
-    if ($LASTEXITCODE -ne 0) { throw "Signing failed: $Path" }
-    & $SignToolPath verify /pa /all /v $Path
-    if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $Path" }
-    $signature = Get-AuthenticodeSignature $Path
-    if ($signature.Status -ne 'Valid' -or -not $signature.TimeStamperCertificate) {
-        throw "A trusted, timestamped signature is required: $Path"
-    }
+    & $signHelper -Path $Path @signArguments
+}
+# Inno expands $q as a quote and $f as its quoted target filename.
+function ConvertTo-InnoQuoted([string]$Value) {
+    if ($Value.Contains('"')) { throw 'Signing paths must not contain quotes.' }
+    return '$q' + $Value.Replace('$', '$$') + '$q'
 }
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
@@ -62,11 +64,21 @@ try {
     Compress-Archive -Path "$publish/*" -DestinationPath $zip -Force
     if ($Installer) {
         $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+        if (-not (Test-Path $compiler)) { $compiler = Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 6/ISCC.exe' }
         if (-not (Test-Path $compiler)) { throw 'Install Inno Setup 6 to build the setup executable.' }
-        & $compiler (Join-Path $root 'installer/yaprflow.iss')
+        $compilerArguments = @()
+        if ($signing) {
+            $command = 'powershell.exe -NoProfile -File ' + (ConvertTo-InnoQuoted $signHelper) + ' -Path $f'
+            foreach ($key in $signArguments.Keys) {
+                $command += ' -' + $key + ' ' + (ConvertTo-InnoQuoted $signArguments[$key])
+            }
+            $compilerArguments += '/DSigningEnabled=1'
+            $compilerArguments += '/Syaprflow=' + $command
+        }
+        & $compiler @compilerArguments (Join-Path $root 'installer/yaprflow.iss')
         if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
         if ($signing) {
-            Protect-Artifact (Join-Path $root 'artifacts/yaprflow-0.2.1-windows-x64-preview-setup.exe')
+            & $signHelper -Path (Join-Path $root 'artifacts/yaprflow-0.2.1-windows-x64-preview-setup.exe') -VerifyOnly @signArguments
         }
     }
     Get-ChildItem (Join-Path $root 'artifacts') -File | Where-Object { $_.Extension -in '.exe', '.zip' } |
