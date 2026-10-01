@@ -2,6 +2,8 @@ namespace YaprFlow.Core;
 
 public enum ModifierGesture { Off, LeftCtrlShift, RightCtrlShift }
 
+public enum SoundPreset { Soft, Wood, Glass, Classic }
+
 public enum TriggerMode { Hold, Toggle }
 
 // Values deliberately match Win32 MOD_* and VK_*, not macOS scan codes.
@@ -32,12 +34,14 @@ public sealed record Settings
     public bool DoubleTapLock { get; init; } = true;
     public bool AIPolish { get; init; }
     public bool LearnCorrections { get; init; }
+    public SoundPreset SoundPreset { get; init; } = SoundPreset.Soft;
     public bool Sounds { get; init; } = true;
     public double SoundVolume { get; init; } = 0.35;
     public int MicrophoneDevice { get; init; } = -1;
 
     public void Validate()
     {
+        if (!Enum.IsDefined(SoundPreset)) throw new InvalidDataException("Choose an available sound preset.");
         if (!double.IsFinite(SoundVolume) || SoundVolume < 0 || SoundVolume > 1)
             throw new InvalidDataException("Sound volume must be between 0 and 100 percent.");
         if (!Enum.IsDefined(ModifierGesture) || SchemaVersion != 1 || Primary is null || !Primary.IsValid ||

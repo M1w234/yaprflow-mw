@@ -7,8 +7,9 @@ namespace YaprFlow.Windows;
 internal sealed class RecordingSounds(string directory) : IDisposable
 {
     private Playback? active;
-    private static readonly byte[] start = Load("start");
-    private static readonly byte[] stop = Load("stop");
+    internal static byte[] Cue(SoundPreset preset, bool starting) => Load(
+        preset == SoundPreset.Classic ? (starting ? "start" : "stop")
+        : preset.ToString().ToLowerInvariant() + (starting ? "-start" : "-stop"));
 
     private static byte[] Load(string name)
     {
@@ -20,13 +21,13 @@ internal sealed class RecordingSounds(string directory) : IDisposable
         return buffer.ToArray();
     }
 
-    public void Play(bool starting, double volume, string? custom = null)
+    public void Play(bool starting, double volume, SoundPreset preset, string? custom = null)
     {
         active?.Dispose(); active = null;
         if (!double.IsFinite(volume) || volume <= 0) return;
         try
         {
-            var data = starting ? start : stop;
+            var data = Cue(preset, starting);
             if (custom is not null && Guid.TryParse(Path.GetFileNameWithoutExtension(custom), out _)
                 && Path.GetFileName(custom) == custom && Path.GetExtension(custom) == ".wav")
             {

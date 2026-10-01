@@ -207,7 +207,7 @@ internal sealed class AppController : IDisposable
     }
     public void PreviewSound(bool start)
     {
-        if (!Session.IsBusy) sounds.Play(start, Settings.SoundVolume, start ? Settings.StartSoundPath : Settings.StopSoundPath);
+        if (!Session.IsBusy) sounds.Play(start, Settings.SoundVolume, Settings.SoundPreset, start ? Settings.StartSoundPath : Settings.StopSoundPath);
     }
     private void SessionChanged()
     {
@@ -220,13 +220,13 @@ internal sealed class AppController : IDisposable
             if (phase == SessionPhase.Listening)
             {
                 recordingTime.Restart();
-                if (Settings.Sounds) sounds.Play(true, Settings.SoundVolume, Settings.StartSoundPath);
+                if (Settings.Sounds) sounds.Play(true, Settings.SoundVolume, Settings.SoundPreset, Settings.StartSoundPath);
             }
             if (phase == SessionPhase.Idle)
             {
                 holdOwner = null; gestures.Reset(); recordingTime.Stop(); hotkeys.SetEscape(false);
             }
-            if (previousPhase == SessionPhase.Listening && Settings.Sounds) sounds.Play(false, Settings.SoundVolume, Settings.StopSoundPath);
+            if (previousPhase == SessionPhase.Listening && Settings.Sounds) sounds.Play(false, Settings.SoundVolume, Settings.SoundPreset, Settings.StopSoundPath);
             previousPhase = phase;
         }
         overlay.Update(phase, Session.Status);

@@ -40,6 +40,29 @@ internal static class UiSmoke
                     using var bottomFile = File.Create(Path.Combine(outputDirectory, name + "-bottom.png")); png.Save(bottomFile);
                 }
             }
+            tabs.SelectedIndex = 2; app.Window.UpdateLayout();
+            var presets = All<ComboBox>(tabs).Single(c => System.Windows.Automation.AutomationProperties.GetAutomationId(c) == "SoundPreset");
+            foreach (var preset in Enum.GetValues<SoundPreset>())
+            {
+                presets.SelectedIndex = (int)preset;
+                if (app.Settings.SoundPreset != preset) throw new InvalidOperationException("Sound preset selection did not save.");
+                foreach (var starting in new[] { true, false })
+                {
+                    using var cue = new NAudio.Wave.WaveFileReader(new MemoryStream(RecordingSounds.Cue(preset, starting)));
+                    if (cue.TotalTime.TotalSeconds is <= 0 or > 1 || cue.WaveFormat.SampleRate != 24000)
+                        throw new InvalidOperationException("Invalid built-in sound cue.");
+                }
+            }
+            presets.SelectedIndex = 0;
+            // Capture the smallest supported window to check scrolling and clipping.
+            app.Window.Width = app.Window.MinWidth; app.Window.Height = app.Window.MinHeight;
+            tabs.SelectedIndex = 0; app.Window.UpdateLayout();
+            await app.Window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+            var compact = new RenderTargetBitmap((int)app.Window.ActualWidth, (int)app.Window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            compact.Render(app.Window);
+            var compactPng = new PngBitmapEncoder(); compactPng.Frames.Add(BitmapFrame.Create(compact));
+            using (var compactFile = File.Create(Path.Combine(outputDirectory, "dictation-compact.png"))) compactPng.Save(compactFile);
+            app.Window.Width = 960; app.Window.Height = 760;
             // Exercise real Win32 registration and rollback, not just mocks.
             var original = app.Settings;
             var hwnd = new WindowInteropHelper(app.Window).Handle;
@@ -80,7 +103,7 @@ internal static class UiSmoke
             await File.WriteAllTextAsync(Path.Combine(outputDirectory, "ui-smoke.json"), JsonSerializer.Serialize(new
             { passed = true, platform = Environment.OSVersion.ToString(), shortcutRegistered = app.HasShortcut,
                 conflictRollback = true, externalShortcutLifecycle = true, unsafeTargetRejected = true,
-                overlayPreservesFocus = true, inputStructBytes = 40,
+                soundPresetSelection = true, allSoundAssetsDecoded = true, overlayPreservesFocus = true, inputStructBytes = 40,
                 tabs = counts }, new JsonSerializerOptions { WriteIndented = true }));
             Application.Current.Shutdown(0);
         }

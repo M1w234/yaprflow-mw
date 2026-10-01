@@ -4,17 +4,27 @@ namespace YaprFlow.Windows;
 
 internal sealed class OverlayWindow : Window
 {
-    private readonly TextBlock status = new() { Foreground = Brush("#E5F5EF"), FontSize = 13, Width = 250, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock status = new() { Foreground = Brush("#E5F5EF"), FontSize = 13, Width = 230, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock time = new() { Foreground = Brush("#94D9BC"), Width = 48, VerticalAlignment = VerticalAlignment.Center };
     private readonly ProgressBar level = new() { Width = 44, Height = 6, Minimum = 0, Maximum = 1, Margin = new Thickness(8), Foreground = Brush("#94D9BC") };
-    private readonly TextBlock preview = new() { Foreground = Brush("#E5F5EF"), FontSize = 16, TextWrapping = TextWrapping.Wrap, MaxHeight = 130, Margin = new Thickness(12, 0, 12, 12), Visibility = Visibility.Collapsed };
+    private readonly TextBlock preview = new() { Foreground = Brush("#E5F5EF"), FontSize = 16, TextWrapping = TextWrapping.Wrap, MaxHeight = 130, Margin = new Thickness(8, 14, 8, 8), Visibility = Visibility.Collapsed };
     private readonly Button finish;
     private readonly Button cancel;
     public OverlayWindow(Action onCancel, Action onFinish)
     {
-        Width = 550; Height = 90; WindowStyle = WindowStyle.None; AllowsTransparency = true;
+        Width = 550; SizeToContent = SizeToContent.Height; MinHeight = 76; WindowStyle = WindowStyle.None; AllowsTransparency = true;
         Background = Brushes.Transparent; Topmost = true; ShowInTaskbar = false; ShowActivated = false;
         ResizeMode = ResizeMode.NoResize; Title = "yaprflow recording";
+        Resources.Add(typeof(Button), System.Windows.Markup.XamlReader.Parse("""
+            <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="Button">
+              <Setter Property="Foreground" Value="#E5F5EF"/><Setter Property="Background" Value="#2C403A"/>
+              <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border Name="b" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center"/></Border>
+                <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#3C594B"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger></ControlTemplate.Triggers>
+              </ControlTemplate></Setter.Value></Setter>
+            </Style>
+            """));
+        SizeChanged += (_, _) => { if (IsVisible) Top = SystemParameters.WorkArea.Bottom - ActualHeight - 24; };
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         // Mouse actions must not move keyboard focus out of the target field.
         // Keyboard equivalents remain Escape, the dictation shortcut, and tray commands.
@@ -23,7 +33,7 @@ internal sealed class OverlayWindow : Window
         cancel.Click += (_, _) => onCancel(); finish.Click += (_, _) => onFinish();
         row.Children.Add(cancel); row.Children.Add(level); row.Children.Add(status); row.Children.Add(time); row.Children.Add(finish);
         var content = new StackPanel(); content.Children.Add(row); content.Children.Add(preview);
-        Content = new Border { Background = Brush("#182322"), CornerRadius = new CornerRadius(22), Padding = new Thickness(12), Child = content, Margin = new Thickness(4) };
+        Content = new Border { Background = Brush("#182322"), CornerRadius = new CornerRadius(14), Padding = new Thickness(12), Child = content, Margin = new Thickness(4) };
         SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(this).Handle;
@@ -47,16 +57,16 @@ internal sealed class OverlayWindow : Window
         {
             var area = SystemParameters.WorkArea;
             Left = area.Left + (area.Width - Width) / 2;
-            Top = area.Bottom - Height - 24;
+            Top = area.Bottom - Math.Max(76, ActualHeight) - 24;
             Show();
         }
     }
     public void SetPreview(string text)
     {
-        preview.Text = "Live draft\n" + (text.Length > 350 ? "…" + text[^350..] : text);
+        preview.Text = (text.Length > 350 ? "…" + text[^350..] : text);
         preview.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
-        Height = preview.Visibility == Visibility.Visible ? 220 : 90;
-        if (IsVisible) Top = SystemParameters.WorkArea.Bottom - Height - 24;
+        UpdateLayout();
+        if (IsVisible) Top = SystemParameters.WorkArea.Bottom - ActualHeight - 24;
     }
     public void SetLevel(float value) => level.Value = Math.Clamp(value * 4, 0, 1);
     public void SetTime(TimeSpan elapsed) => time.Text = $"{(int)elapsed.TotalMinutes}:{elapsed.Seconds:00}";

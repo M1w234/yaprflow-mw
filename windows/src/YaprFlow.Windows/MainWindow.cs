@@ -38,25 +38,26 @@ internal sealed class MainWindow : Window
         { Source = new Uri("pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.Light.xaml") });
         FontFamily = new FontFamily("Segoe UI"); FontSize = 14; Background = SystemParameters.HighContrast ? SystemColors.WindowBrush : new SolidColorBrush(Color.FromRgb(243, 246, 243)); Foreground = SystemParameters.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(Color.FromRgb(32, 51, 45));
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        var root = new DockPanel { Margin = new Thickness(24) };
-        var heading = new StackPanel();
-        heading.Children.Add(new TextBlock { Text = "yaprflow", FontSize = 28, FontWeight = FontWeights.SemiBold });
-        heading.Children.Add(Text("Your voice, on your PC. Local dictation for Windows.", 0, 6));
-        heading.Children.Add(sessionStatus);
-        DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
-        notice.TextWrapping = TextWrapping.Wrap; notice.Margin = new Thickness(0, 12, 0, 0);
+        if (!SystemParameters.HighContrast) Resources.MergedDictionaries.Add(new ResourceDictionary
+        { Source = new Uri("pack://application:,,,/yaprflow;component/Theme.xaml") });
+        var root = new DockPanel();
+        var footer = new StackPanel { Margin = new Thickness(24, 10, 24, 12) };
+        sessionStatus.FontSize = 12;
+        footer.Children.Add(sessionStatus);
+        notice.TextWrapping = TextWrapping.Wrap; notice.FontSize = 12; notice.Margin = new Thickness(0, 4, 0, 0);
         AutomationProperties.SetLiveSetting(notice, AutomationLiveSetting.Polite);
-        DockPanel.SetDock(notice, Dock.Bottom); root.Children.Add(notice);
-        var tabs = new TabControl { Margin = new Thickness(0, 18, 0, 0), TabStripPlacement = Dock.Left };
+        footer.Children.Add(notice);
+        DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer);
+        var tabs = new TabControl { TabStripPlacement = Dock.Left };
         StackPanel Section(string name, string description)
         {
-            var panel = new StackPanel { Margin = new Thickness(24), MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Stretch };
-            panel.Children.Add(TitleText(name)); panel.Children.Add(Text(description, 0, 18));
+            var panel = new StackPanel { Margin = new Thickness(32, 28, 32, 28), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch };
+            panel.Children.Add(new TextBlock { Text = name, FontSize = 28, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) }); panel.Children.Add(Text(description, 0, 24));
             var item = new TabItem { Header = name, Padding = new Thickness(14, 10, 14, 10),
                 Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
             tabs.Items.Add(item); return panel;
         }
-        var dictation = Section("Dictation", "Your voice, written where you work. Everything is recognized on this PC.");
+        var dictation = Section("Dictation", "Speak naturally. Keep your attention on what you’re writing.");
         settingsGroups.Add(dictation);
         var devices = Microphone.Devices().ToList();
         var mic = new ComboBox { MinHeight = 36, DisplayMemberPath = "Name" };
@@ -78,7 +79,7 @@ internal sealed class MainWindow : Window
                     micRefreshing = false;
                 }
                 micState.Text = devices.Count <= 1 ? "Connect a microphone to get started. The list updates automatically."
-                    : "Inputs update automatically. Your selected microphone is remembered across reconnects.";
+                    : "Your microphone is remembered when you reconnect it.";
             }
             catch (Exception ex) { micState.Text = "Could not read microphones: " + ex.Message; }
         }
@@ -93,13 +94,11 @@ internal sealed class MainWindow : Window
         RefreshMicrophones();
         var deviceTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         deviceTimer.Tick += (_, _) => { if (IsVisible) RefreshMicrophones(); }; deviceTimer.Start();
-        dictation.Children.Add(Setting("Stream text into my app while I speak", () => app.Settings.StreamingInsertion, v => app.Settings with { StreamingInsertion = v }));
-        dictation.Children.Add(Text("Completed phrases appear at speech pauses. Release Ctrl/Alt to let text through; tap-to-toggle works best. Cancel stops new text and leaves anything already inserted.", 6, 12));
-        dictation.Children.Add(Setting("Show a live draft in the recording panel", () => app.Settings.StreamingPreview, v => app.Settings with { StreamingPreview = v }));
-        dictation.Children.Add(Setting("Insert text into the original field", () => app.Settings.AutomaticInsertion, v => app.Settings with { AutomaticInsertion = v }));
-        dictation.Children.Add(Setting("Light cleanup · spacing and punctuation", () => app.Settings.LightCleanup, v => app.Settings with { LightCleanup = v }));
-        dictation.Children.Add(Setting("AI Polish · grammar and punctuation", () => app.Settings.AIPolish, v => app.Settings with { AIPolish = v }));
-        dictation.Children.Add(Text("Optional local model in Models. Polishes each completed phrase before insertion and can add a delay. Original words remain available in History. If polishing fails, dictation keeps the original.", 6, 12));
+        dictation.Children.Add(Setting("Streaming text", () => app.Settings.StreamingInsertion, v => app.Settings with { StreamingInsertion = v }, "Phrases appear when you pause. Release shortcut keys to insert; tap-to-toggle works best. Cancel leaves text already inserted."));
+        dictation.Children.Add(Setting("Live preview", () => app.Settings.StreamingPreview, v => app.Settings with { StreamingPreview = v }, "See a draft in the recording panel as you speak."));
+        dictation.Children.Add(Setting("Automatic insertion", () => app.Settings.AutomaticInsertion, v => app.Settings with { AutomaticInsertion = v }, "Send your words to the field where you started."));
+        dictation.Children.Add(Setting("Light cleanup", () => app.Settings.LightCleanup, v => app.Settings with { LightCleanup = v }, "Tidy spacing and punctuation."));
+        dictation.Children.Add(Setting("AI Polish", () => app.Settings.AIPolish, v => app.Settings with { AIPolish = v }, "Refine grammar with an optional local model. Adds a short delay; originals stay in History. Download it in Models."));
         dictation.Children.Add(Row(Button("Windows microphone settings", () => Process.Start(new ProcessStartInfo("ms-settings:privacy-microphone") { UseShellExecute = true }))));
 
         var shortcuts = Section("Shortcuts", "Choose a comfortable way to start. Tap-to-toggle is recommended for streaming text.");
@@ -132,8 +131,27 @@ internal sealed class MainWindow : Window
         shortcuts.Children.Add(Setting("Double-tap the gesture to keep recording", () => app.Settings.DoubleTapLock, v => app.Settings with { DoubleTapLock = v }));
         shortcuts.Children.Add(Text("Hold both keys to talk; release to finish. Two quick taps lock recording; tap once more to finish. Other keys reject a hold gesture. Your regular shortcut remains active. Escape cancels.", 8, 0));
 
-        var sound = Section("Sound", "Small confirmations, at the volume that feels right for you."); settingsGroups.Add(sound);
+        var sound = Section("Sound", "A little feedback. Just enough to know you’re recording."); settingsGroups.Add(sound);
         sound.Children.Add(Setting("Play start and stop sounds", () => app.Settings.Sounds, v => app.Settings with { Sounds = v }));
+        var preset = new ComboBox { MinHeight = 40, ItemsSource = new[] { "Soft", "Wood", "Glass", "Classic" }, SelectedIndex = (int)app.Settings.SoundPreset };
+        AutomationProperties.SetAutomationId(preset, "SoundPreset");
+        sound.Children.Add(Label("Sound _style", preset)); sound.Children.Add(preset);
+        var presetDescription = Text("", 8, 16); sound.Children.Add(presetDescription);
+        void DescribePreset() => presetDescription.Text = app.Settings.SoundPreset switch
+        {
+            SoundPreset.Soft => "A gentle, rounded tap. Our quietest everyday option.",
+            SoundPreset.Wood => "A dry, tactile knock with a quick finish.",
+            SoundPreset.Glass => "A light, clear note with a little more ring.",
+            _ => "The original rising and falling tones."
+        };
+        preset.SelectionChanged += (_, _) =>
+        {
+            if (preset.SelectedIndex < 0) return;
+            if (!app.SaveSettings(app.Settings with { SoundPreset = (SoundPreset)preset.SelectedIndex }))
+                preset.SelectedIndex = (int)app.Settings.SoundPreset;
+            DescribePreset();
+        };
+        DescribePreset();
         var volume = new Slider { Minimum = 0, Maximum = 100, Value = app.Settings.SoundVolume * 100,
             TickFrequency = 5, IsSnapToTickEnabled = true, SmallChange = 5, LargeChange = 10, MinHeight = 36 };
         AutomationProperties.SetName(volume, "Recording sound volume");
@@ -151,17 +169,17 @@ internal sealed class MainWindow : Window
             var picker = new OpenFileDialog { Title = "Choose a short recording cue", Filter = "WAV audio|*.wav", CheckFileExists = true };
             if (picker.ShowDialog(this) == true) app.ImportSound(start, picker.FileName);
         }
-        sound.Children.Add(TitleText("Recording starts", 20));
+        sound.Children.Add(TitleText("Start cue", 20));
         var startName = Text(""); sound.Children.Add(startName);
         sound.Children.Add(Row(Button("Preview start", () => app.PreviewSound(true)), Button("Import WAV…", () => ImportCue(true)),
-            Button("Use default", () => app.SaveSettings(app.Settings with { StartSoundPath = null }))));
-        sound.Children.Add(TitleText("Recording ends", 20));
+            Button("Use selected style", () => app.SaveSettings(app.Settings with { StartSoundPath = null }))));
+        sound.Children.Add(TitleText("Stop cue", 20));
         var stopName = Text(""); sound.Children.Add(stopName);
         sound.Children.Add(Row(Button("Preview stop", () => app.PreviewSound(false)), Button("Import WAV…", () => ImportCue(false)),
-            Button("Use default", () => app.SaveSettings(app.Settings with { StopSoundPath = null }))));
-        void CueLabels() { startName.Text = app.Settings.StartSoundPath is null ? "Soft rise · built in" : "Your imported start sound"; stopName.Text = app.Settings.StopSoundPath is null ? "Soft drop · built in" : "Your imported stop sound"; }
+            Button("Use selected style", () => app.SaveSettings(app.Settings with { StopSoundPath = null }))));
+        void CueLabels() { startName.Text = app.Settings.StartSoundPath is null ? app.Settings.SoundPreset + " · higher tap" : "Your imported start sound"; stopName.Text = app.Settings.StopSoundPath is null ? app.Settings.SoundPreset + " · lower tap" : "Your imported stop sound"; }
         CueLabels(); app.Changed += CueLabels;
-        sound.Children.Add(Text("WAV files up to 3 seconds. Imported sounds are copied locally and limited in peak level. Preview works even when recording cues are off. Volume affects only yaprflow.", 20, 0));
+        sound.Children.Add(Text("Try each cue at your chosen volume, even with sounds off. Custom WAVs override the style for that cue; use “Use selected style” to switch back. Up to 3 seconds. Volume affects only yaprflow.", 20, 0));
 
         var privacy = Section("Privacy", "Your audio stays in memory. Your words and preferences stay on this PC."); settingsGroups.Add(privacy);
         privacy.Children.Add(Setting("Save transcripts in local History", () => app.Settings.KeepHistory, v => app.Settings with { KeepHistory = v }));
@@ -195,11 +213,12 @@ internal sealed class MainWindow : Window
         models.Children.Add(Text("Qwen3 0.6B · 610 MB · allow 2 GB of memory. No account or other app required. This download is optional.", 6, 0));
         void RefreshPolish() { polishStatus.Text = app.PolishStatus; polishButton.IsEnabled = !app.ModelBusy && !app.Session.IsBusy; polishCancel.IsEnabled = app.PolishDownloading; }
         app.Changed += RefreshPolish; RefreshPolish();
-        models.Children.Add(Text("Windows 11 · x64 · Preview 0.2.0", 24, 0));
+        models.Children.Add(Text("Windows 11 · x64 · Preview 0.2.1", 24, 0));
         if (!app.Installer.IsInstalled) tabs.SelectedIndex = 4;
 
-        var historyPanel = new DockPanel { Margin = new Thickness(16) };
+        var historyPanel = new DockPanel { Margin = new Thickness(32, 28, 32, 28) };
         var historyTop = new StackPanel();
+        historyTop.Children.Add(TitleText("History")); historyTop.Children.Add(Text("Your recent words, ready to use again.", 0, 16));
         historyTop.Children.Add(Label("_Search history", search)); historyTop.Children.Add(search); historyTop.Children.Add(historyState);
         DockPanel.SetDock(historyTop, Dock.Top); historyPanel.Children.Add(historyTop);
         var historyBottom = new StackPanel();
@@ -225,9 +244,9 @@ internal sealed class MainWindow : Window
         search.TextChanged += (_, _) => RefreshHistory();
         tabs.Items.Add(new TabItem { Header = "_History", Content = historyPanel });
 
-        var vocabPanel = new DockPanel { Margin = new Thickness(16) };
+        var vocabPanel = new DockPanel { Margin = new Thickness(32, 28, 32, 28) };
         var intro = Text("Teach yaprflow names and phrases it keeps mishearing. These replacements run locally after transcription.", 0, 14);
-        var learn = new StackPanel(); learn.Children.Add(intro);
+        var learn = new StackPanel(); learn.Children.Add(TitleText("Vocabulary")); learn.Children.Add(intro);
         learn.Children.Add(Setting("Suggest vocabulary from corrections I make", () => app.Settings.LearnCorrections, v => app.Settings with { LearnCorrections = v }));
         learn.Children.Add(Text("Off by default. For 20 seconds after insertion, checks only the same non-password field while it stays focused. Suggestions stay in memory until you approve them. Field contents are never saved.", 6, 12));
         var suggestions = new ComboBox { MinHeight = 32, DisplayMemberPath = nameof(VocabularyRow.Label) };
@@ -270,9 +289,15 @@ internal sealed class MainWindow : Window
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && app.Session.IsBusy) { _ = app.Session.CancelAsync(); e.Handled = true; } };
         app.Changed += Refresh; Refresh();
     }
-    private CheckBox Setting(string title, Func<bool> value, Func<bool, Settings> change)
+    private CheckBox Setting(string title, Func<bool> value, Func<bool, Settings> change, string? description = null)
     {
-        var box = new CheckBox { Content = title, IsChecked = value(), Margin = new Thickness(0, 12, 0, 0) };
+        var content = new StackPanel();
+        content.Children.Add(new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.SemiBold });
+        if (description is not null) content.Children.Add(Text(description, 5, 0));
+        var box = new CheckBox { Content = content, IsChecked = value(), Margin = new Thickness(0, 0, 0, 4) };
+        AutomationProperties.SetName(box, title);
+        if (description is not null) AutomationProperties.SetHelpText(box, description);
+        if (!SystemParameters.HighContrast) box.Style = (Style)FindResource("SettingToggle");
         box.Click += (_, _) => { if (!app.SaveSettings(change(box.IsChecked == true))) box.IsChecked = value(); };
         return box;
     }
@@ -283,7 +308,7 @@ internal sealed class MainWindow : Window
         download.Content = app.Installer.IsInstalled ? "Repair speech model" : "Download speech model";
         cancelDownload.IsEnabled = app.CanCancelDownload;
         foreach (var group in settingsGroups) group.IsEnabled = !app.ModelBusy && !app.Session.IsBusy;
-        notice.Text = app.Notice;
+        notice.Text = app.Notice; notice.Visibility = string.IsNullOrWhiteSpace(app.Notice) ? Visibility.Collapsed : Visibility.Visible;
         sessionStatus.Text = !app.HasShortcut ? "No shortcut available — choose another combination in Settings"
             : app.Session.IsBusy ? app.Session.Status
             : !app.ModelReady ? (app.ModelBusy ? "Preparing the speech model…" : "Download or repair the speech model to enable dictation")
@@ -311,12 +336,12 @@ internal sealed class MainWindow : Window
     { public string Label => $"{Entry.CreatedAt.LocalDateTime:g}   {Entry.Text.Replace('\n', ' ')[..Math.Min(Entry.Text.Length, 80)]}\n{Entry.Delivery}"; }
     private sealed record VocabularyRow(VocabularyRule Rule) { public string Label => $"{Rule.Heard}  →  {Rule.Replacement}"; }
     internal static TextBlock Text(string text, double top = 0, double bottom = 0) => new()
-    { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, bottom) };
+    { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 13, Foreground = SystemParameters.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(Color.FromRgb(98, 113, 105)), Margin = new Thickness(0, top, 0, bottom) };
     private static TextBlock TitleText(string text, double top = 0) => new() { Text = text, FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, top, 0, 12) };
     internal static Label Label(string title, UIElement target) => new() { Content = title, Target = target, Padding = new Thickness(0, 8, 0, 4) };
     internal static Button Button(string title, Action action)
     {
-        var button = new Button { Content = title, MinHeight = 32, Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 4, 8, 4) };
+        var button = new Button { Content = title, MinHeight = 36, Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(0, 4, 8, 4) };
         button.Click += (_, _) => action(); return button;
     }
     internal static WrapPanel Row(params UIElement[] children)

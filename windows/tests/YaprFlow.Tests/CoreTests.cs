@@ -57,6 +57,7 @@ public class CoreTests
         settings.Validate();
         Assert.False(settings.Sounds);
         Assert.Equal(.35, settings.SoundVolume);
+        Assert.Equal(SoundPreset.Soft, settings.SoundPreset);
         var changed = settings with { SoundVolume = .6 };
         Assert.Equal(changed, System.Text.Json.JsonSerializer.Deserialize<Settings>(System.Text.Json.JsonSerializer.Serialize(changed)));
     }
@@ -64,6 +65,14 @@ public class CoreTests
     [InlineData(-.1)] [InlineData(1.1)] [InlineData(double.NaN)] [InlineData(double.PositiveInfinity)]
     public void InvalidSoundVolumeRejected(double volume) => Assert.Throws<InvalidDataException>(() =>
         new Settings { SoundVolume = volume }.Validate());
+    [Fact]
+    public void SoundPresetRoundTripPreservesCustomCueAndOtherPreferences()
+    {
+        var settings = new Settings { SoundPreset = SoundPreset.Wood, SoundVolume = .2, StartSoundPath = "custom.wav", Sounds = false };
+        var restored = System.Text.Json.JsonSerializer.Deserialize<Settings>(System.Text.Json.JsonSerializer.Serialize(settings));
+        Assert.Equal(settings, restored);
+        Assert.Throws<InvalidDataException>(() => new Settings { SoundPreset = (SoundPreset)99 }.Validate());
+    }
     [Fact]
     public void LongAudioSegmentationKeepsEverySampleAndBoundsMemory()
     {
