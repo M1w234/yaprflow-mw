@@ -14,6 +14,7 @@ public class DesklingBridgeTests
         public readonly List<(string Path, string Body)> Requests = [];
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
+            if (request.Content is not null) Assert.True(request.Content.Headers.ContentLength > 0);
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(token);
             var path = request.RequestUri!.AbsolutePath;
             Requests.Add((path, body));

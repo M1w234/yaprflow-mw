@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 
 namespace YaprFlow.Core;
@@ -56,7 +56,9 @@ public sealed class DesklingBridge(HttpClient http, Func<string> state, Action<s
     }
     private async Task<JsonDocument> PostAsync(string path, object value, CancellationToken token)
     {
-        using var response = await http.PostAsJsonAsync("http://127.0.0.1:8737/api/yaprflow/" + path, value, token);
+        // The relay deliberately requires Content-Length, not chunked JSON.
+        using var content = new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
+        using var response = await http.PostAsync("http://127.0.0.1:8737/api/yaprflow/" + path, content, token);
         response.EnsureSuccessStatusCode();
         return await ReadAsync(response, token);
     }
