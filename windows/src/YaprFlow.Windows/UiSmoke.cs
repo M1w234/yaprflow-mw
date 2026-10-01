@@ -18,7 +18,7 @@ internal static class UiSmoke
             if (!app.HasShortcut) throw new InvalidOperationException("The fresh default shortcut did not register.");
             var tabs = Find<TabControl>(app.Window) ?? throw new InvalidOperationException("No settings tabs rendered.");
             var counts = new Dictionary<string, int>();
-            foreach (var name in new[] { "settings", "history", "vocabulary" })
+            foreach (var name in new[] { "dictation", "shortcuts", "sound", "privacy", "models", "history", "vocabulary" })
             {
                 tabs.SelectedIndex = counts.Count;
                 app.Window.UpdateLayout();
@@ -30,14 +30,14 @@ internal static class UiSmoke
                 image.Render(app.Window);
                 var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image));
                 using var file = File.Create(Path.Combine(outputDirectory, name + ".png")); encoder.Save(file);
-                if (name == "settings" && Find<ScrollViewer>(tabs) is { } scroll)
+                if (name is "dictation" or "shortcuts" or "vocabulary" && Find<ScrollViewer>(tabs) is { } scroll)
                 {
                     scroll.ScrollToEnd(); app.Window.UpdateLayout();
                     await app.Window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
                     var bottom = new RenderTargetBitmap((int)app.Window.ActualWidth, (int)app.Window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
                     bottom.Render(app.Window);
                     var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bottom));
-                    using var bottomFile = File.Create(Path.Combine(outputDirectory, "settings-bottom.png")); png.Save(bottomFile);
+                    using var bottomFile = File.Create(Path.Combine(outputDirectory, name + "-bottom.png")); png.Save(bottomFile);
                 }
             }
             // Exercise real Win32 registration and rollback, not just mocks.
@@ -67,7 +67,7 @@ internal static class UiSmoke
             var overlay = new OverlayWindow(() => { }, () => { });
             try
             {
-                overlay.Update(SessionPhase.Listening, "Listening…"); overlay.SetLevel(.15f); overlay.SetTime(TimeSpan.FromSeconds(7));
+                overlay.Update(SessionPhase.Listening, "Listening…"); overlay.SetPreview("This is a live draft. Completed phrases appear in your app when you pause."); overlay.SetLevel(.15f); overlay.SetTime(TimeSpan.FromSeconds(7));
                 await overlay.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
                 if (Native.GetForegroundWindow() != foreground)
                     throw new InvalidOperationException("Recording overlay stole foreground focus.");

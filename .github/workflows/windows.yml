@@ -50,10 +50,20 @@ jobs:
           $receipt = $result | ConvertFrom-Json
           if ($receipt.text -notmatch 'old portrait') { throw 'Unexpected recognition result.' }
           $result
+      - name: Real offline AI Polish on Windows CPU
+        shell: pwsh
+        run: |
+          $model = Join-Path $env:RUNNER_TEMP 'qwen3-polish'
+          $result = dotnet run --project windows/tools/YaprFlow.Smoke -c Release -- --polish $model
+          if ($LASTEXITCODE -ne 0) { throw 'Local AI Polish inference failed.' }
+          $result | Set-Content windows/artifacts/polish-smoke.json
+          $receipt = $result | ConvertFrom-Json
+          if ($receipt.text -notmatch '10') { throw 'AI Polish did not preserve the number.' }
+          $result
       - name: Install and uninstall preview
         shell: pwsh
         run: |
-          $setup = Start-Process 'windows/artifacts/yaprflow-0.1.1-windows-x64-preview-setup.exe' -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          $setup = Start-Process 'windows/artifacts/yaprflow-0.2.0-windows-x64-preview-setup.exe' -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
           if ($setup.ExitCode -ne 0) { throw 'Installer failed.' }
           $exe = Join-Path $env:LOCALAPPDATA 'Programs/yaprflow/yaprflow.exe'
           if (-not (Test-Path $exe)) { throw 'Installed executable missing.' }
@@ -69,6 +79,7 @@ jobs:
             windows/artifacts/*.zip
             windows/artifacts/SHA256SUMS.txt
             windows/artifacts/model-smoke.json
+            windows/artifacts/polish-smoke.json
             windows/artifacts/ui-smoke/**
             windows/tests/**/TestResults/*.trx
           if-no-files-found: error

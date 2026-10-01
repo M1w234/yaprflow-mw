@@ -2,6 +2,22 @@ using System.Diagnostics;
 using System.Text.Json;
 using YaprFlow.Speech;
 
+if (args.Length == 2 && args[0] == "--polish")
+{
+    try
+    {
+        var model = new YaprFlow.Polish.PolishModel(args[1]);
+        if (!model.IsInstalled) await model.DownloadAsync(new Progress<double>(), CancellationToken.None);
+        using var polish = new YaprFlow.Polish.LocalPolisher(model);
+        var watch = Stopwatch.StartNew();
+        const string original = "i has two meeting tomorrow at 10";
+        var text = await polish.PolishAsync(original, CancellationToken.None);
+        Console.WriteLine(JsonSerializer.Serialize(new { model = "Qwen3-0.6B-Q8_0", original, text, seconds = watch.Elapsed.TotalSeconds }));
+        return 0;
+    }
+    catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+}
+
 // This tool is deliberately separate from the tray executable. It verifies the
 // production model installer and recognizer without microphone/UI permissions.
 if (args.Length is < 2 or > 4)

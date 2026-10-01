@@ -1,6 +1,6 @@
 # yaprflow for Windows
 
-A Windows companion to the native Mac app. **Preview 0.1.1 — Windows 11 on Intel/AMD x64.**
+A Windows companion to the native Mac app. **Preview 0.2.0 — Windows 11 on Intel/AMD x64.**
 Uses local Parakeet TDT 0.6B v2 through sherpa-onnx. No account, Python installation, NVIDIA GPU, or separate .NET installation is required for the packaged app.
 
 ## Get started
@@ -29,7 +29,7 @@ Unsigned preview builds may receive Windows reputation warnings. A signed, hardw
 
 ## Intentional preview limits
 
-- Modifier-only gestures, double-tap lock, streaming partial text, AI Polish, screen context, and automatic correction learning are not included.
+- Preview 0.2.0 adds streaming at speech pauses, side-specific modifier gestures/double-tap lock, optional local AI Polish, and reviewed correction suggestions. Screen context, summarization, and automatic application of learned corrections are not included.
 - Recognition completes after release. Long audio uses bounded chunks, preferring quiet boundaries; this needs testing on continuous speech and noisy microphones.
 - Some applications expose no safely identifiable editable field. Insertion is withheld there. Administrator/elevated applications may also reject synthetic input. Recover the transcript manually; yaprflow does not elevate itself, press Enter, or automatically resend.
 - Input dispatch is best-effort: a successful Windows `SendInput` call confirms dispatch, not that the receiving app accepted the text. Check the field before retrying.
@@ -81,3 +81,15 @@ dotnet run --project windows/tools/YaprFlow.Smoke -- /path/to/model /path/to/sam
 - `docs/WINDOWS-ACCEPTANCE.md`: the physical-PC check before wider distribution.
 
 Mac remains in the existing Swift project. Vocabulary concepts and cleanup behavior match the Mac version; Windows settings use their own schema and are not directly interchangeable with the Mac preferences file. There is no cross-device synchronization.
+
+## Preview 0.2.0
+
+Choose tap-to-toggle in **Shortcuts** for direct streaming. Completed phrases are inserted when you pause; held Ctrl/Alt keys queue text until released. A live draft can change until committed. Cancel stops new insertions; words already sent remain in the destination. If focus changes, remaining text stays in History.
+
+**Models** offers an optional 610 MiB AI Polish download. Enable it in Dictation after downloading. Grammar cleanup runs entirely inside yaprflow on the CPU and can slow streaming. History includes Copy original. Speech recognition works without the Polish model.
+
+**Vocabulary** can suggest corrections you make immediately after dictation. This is off by default and only observes the same non-password field for up to 20 seconds; approve a suggestion before it becomes a rule. Suggestions are not saved automatically.
+
+**Sound** supports quiet original cues, independent volume, and custom WAV imports. **Dictation** refreshes microphones automatically and remembers the selected device across reconnects. **Shortcuts** adds optional left/right Ctrl+Shift hold and double-tap lock.
+
+This preview needs hardware acceptance before public release. See docs/RELEASE-READINESS.md for evidence and remaining gates.

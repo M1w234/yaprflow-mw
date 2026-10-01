@@ -8,6 +8,7 @@
     <ApplicationIcon>Assets/yaprflow.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../YaprFlow.Polish/YaprFlow.Polish.csproj" />
     <ProjectReference Include="../YaprFlow.Core/YaprFlow.Core.csproj" />
     <ProjectReference Include="../YaprFlow.Speech/YaprFlow.Speech.csproj" />
     <PackageReference Include="NAudio" Version="2.2.1" />

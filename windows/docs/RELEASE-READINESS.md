@@ -1,37 +1,28 @@
 # Windows parity and release readiness
 
-Updated September 30, 2026. The Windows companion is a private preview, not a full Mac feature match. Public release has not been approved or published.
+Updated September 30, 2026. Preview 0.2.0 is a private candidate; no public release is authorized by this work.
 
-## Current evidence
+## Implemented in 0.2.0
 
-- Windows CI passed at 3418c73: build, native UI/shortcut checks, real CPU model inference, installer/uninstaller.
-- Michael confirmed physical microphone dictation, Ctrl+Alt+Space, browser insertion, and dictation after quitting/reopening on a Ryzen 9 Windows 11 PC.
-- Mac verified SSH and RustDesk reconnection after a real Windows restart. SSH returned after a delay; pre-login access was not observed. Remote access is test infrastructure, not a customer requirement.
-- Preview 0.1.1 replaces Windows notification sounds with original, short start/stop cues. Defaults to 35% app-local volume; adds volume control and previews. Perceived loudness still needs Michael's listening check.
+- Direct streaming: completed phrases at quiet boundaries, with a revisable live draft. Insertion is held while modifier keys are down; tap-to-toggle is recommended. No rewriting of already inserted text. Cancel cannot remove text already sent.
+- Flat settings navigation: Dictation, Shortcuts, Sound, Privacy, Models, History, Vocabulary. Native Segoe UI controls, keyboard labels, scrolling, high-contrast colors where available.
+- Stable microphone endpoint IDs with periodic device refresh; reconnecting the selected input does not silently switch it. Input loss cancels the session. Legacy numeric selections migrate only if uniquely identifiable.
+- Soft original cues, independent volume, preview, and local mono/stereo WAV imports up to three seconds, limited to a safe peak in the imported file.
+- Optional side-specific Ctrl+Shift hold, double-tap lock, next-tap finish. Extra modifiers/ordinary shortcuts reject the gesture. The registered primary and external shortcuts remain available. Escape/on-screen cancel and ten-minute cap remain.
+- Optional built-in offline AI Polish using Qwen3 0.6B Q8_0 and LLamaSharp CPU. Extra 610 MiB checksum-verified download, no other app. Each completed phrase is polished before insertion; this adds latency. Original transcript remains in History; cancellation and failed/oversized/number-changing output preserve original text. This is grammar cleanup, not summarization.
+- Opt-in learned correction suggestions: only the exact non-password field just used, at most 20 seconds while focused, bounded document size, small stable word edits. No field contents saved; suggestions are memory-only until reviewed in Vocabulary.
 
-## Feature comparison
+## Evidence
 
-| Area | Windows state | Recommendation |
-| --- | --- | --- |
-| Offline Parakeet dictation | Implemented and user-tested on one PC | Test a typical Intel laptop and longer/noisy speech |
-| Hold/toggle keyboard shortcuts and separate mouse mapping | Implemented; primary hold user-tested | Exercise toggle, conflicts, cancellation, and mouse mapping |
-| Safe insertion, history, vocabulary | Implemented; browser insertion user-tested | Complete app/field switching, clipboard, password-field, and history checks |
-| Recording cues | Quiet original cues and independent volume in 0.1.1 | Listen on the PC and tune defaults if needed |
-| Custom sound selection/import | Mac supports it; Windows currently has a fixed cue pair | Optional follow-up, not required for dependable dictation |
-| Microphone changes | List collected when Settings is constructed; numeric device selection | Refresh devices and preserve selection reliably across reconnects before broad release |
-| Startup, tray, installer | Implemented | Verify sign-in launch and actual upgrade on physical PC |
-| Modifier-only gestures and double-tap lock | Not implemented | Separate Windows hotkey design/test effort; do not advertise parity |
-| Streaming partial text | Not implemented | Follow-up; Windows currently finalizes on release |
-| AI Polish/summarization and learned corrections | Not implemented | Separate local inference/privacy work; document clearly |
-| ARM Windows and automatic updates | Not validated / not implemented | Ship x64 scope and manual updates first |
+- Prior 0.1.1 passed CI, installer upgrade preserving settings/history/model, and Michael's physical microphone dictation/browser insertion/quit-relaunch tests.
+- Current 0.2.0 has 54 behavior tests passing locally and a cross-compiled Windows build. Native Windows CI, real-model inference and rendered UI are required for this exact candidate.
+- Microphone reconnect, streaming while speaking, modifier lock, custom sound listening, correction observation and AI Polish latency need a physical PC acceptance pass after upgrade.
+- Remote SSH/RustDesk reconnection after reboot passed previously; pre-login access remains unobserved. Remote access is test infrastructure, never a customer requirement.
 
-## Gates before broad public release
+## Before public release
 
-1. Finish microphone reconnection/selection behavior and verify the complete installer upgrade preserves settings, history, and models.
-2. Complete windows/docs/WINDOWS-ACCEPTANCE.md, prioritizing no wrong-field insertion, cancellation, microphone loss, offline relaunch, and long recordings. Track evidence, not inferred passes.
-3. Test one ordinary Intel laptop as well as the existing AMD desktop; measure recognition latency and memory, and establish honest minimum requirements.
-4. Run a small private beta with clear preview labeling, known limitations, and a feedback route.
-5. Review code/dependency licenses and model notices; arrange Windows publisher signing, verify signatures, and test downloaded installer behavior. Signing alone does not guarantee immediate Windows reputation.
-6. Review/merge the companion PR, publish the approved signed artifacts with checksums and release notes, and create one download page with separate Mac and Windows choices and explicit feature differences.
-
-Full Mac feature parity is not needed for a scoped Windows release. Reliability, clear feature claims, and a reproducible installer are needed. No signing credential, public deployment, or release publication is part of the sound change.
+1. Complete WINDOWS-ACCEPTANCE.md on this candidate, especially wrong-field prevention, cancel, unplug/replug, long speech and offline relaunch.
+2. Test a typical Intel laptop as well as the AMD desktop. Measure CPU latency and memory for streaming plus Polish. x64 only; no ARM support claim.
+3. Verify installer upgrade preserving settings/history/vocabulary/custom cues/models and sign-in launch.
+4. Private beta, publisher signing, downloaded-installer verification and honest feature notes. Automatic updates and summarization remain out of scope.
+5. Review/merge the PR and publish separately approved signed artifacts/checksums with distinct Mac/Windows downloads.

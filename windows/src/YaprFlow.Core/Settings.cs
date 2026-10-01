@@ -1,5 +1,7 @@
 namespace YaprFlow.Core;
 
+public enum ModifierGesture { Off, LeftCtrlShift, RightCtrlShift }
+
 public enum TriggerMode { Hold, Toggle }
 
 // Values deliberately match Win32 MOD_* and VK_*, not macOS scan codes.
@@ -21,6 +23,15 @@ public sealed record Settings
     public bool AutomaticInsertion { get; init; } = true;
     public bool LightCleanup { get; init; } = true;
     public bool KeepHistory { get; init; } = true;
+    public bool StreamingInsertion { get; init; } = true;
+    public bool StreamingPreview { get; init; } = true;
+    public string? MicrophoneId { get; init; }
+    public string? StartSoundPath { get; init; }
+    public string? StopSoundPath { get; init; }
+    public ModifierGesture ModifierGesture { get; init; }
+    public bool DoubleTapLock { get; init; } = true;
+    public bool AIPolish { get; init; }
+    public bool LearnCorrections { get; init; }
     public bool Sounds { get; init; } = true;
     public double SoundVolume { get; init; } = 0.35;
     public int MicrophoneDevice { get; init; } = -1;
@@ -29,7 +40,7 @@ public sealed record Settings
     {
         if (!double.IsFinite(SoundVolume) || SoundVolume < 0 || SoundVolume > 1)
             throw new InvalidDataException("Sound volume must be between 0 and 100 percent.");
-        if (SchemaVersion != 1 || Primary is null || !Primary.IsValid ||
+        if (!Enum.IsDefined(ModifierGesture) || SchemaVersion != 1 || Primary is null || !Primary.IsValid ||
             (External is not null && (!External.IsValid ||
             (External.Key == Primary.Key && External.Modifiers == Primary.Modifiers))) || MicrophoneDevice < -1)
             throw new InvalidDataException("Settings contain an unsupported or conflicting shortcut. Reset shortcuts in Settings.");
@@ -37,4 +48,4 @@ public sealed record Settings
 }
 
 public sealed record VocabularyRule(string Heard, string Replacement);
-public sealed record HistoryEntry(Guid Id, DateTimeOffset CreatedAt, string Text, string Delivery);
+public sealed record HistoryEntry(Guid Id, DateTimeOffset CreatedAt, string Text, string Delivery, string? OriginalText = null);

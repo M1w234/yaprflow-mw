@@ -7,9 +7,11 @@ internal sealed record Target(IntPtr Window, int ProcessId, int[] RuntimeId);
 
 internal sealed class TextDelivery : ITextDelivery
 {
+    public Target? LastTarget { get; private set; }
+    public bool CanStreamNow => !Native.AnyModifierDown;
     // One outstanding UIA call at most, even if a third-party app hangs forever.
     private readonly SemaphoreSlim uiaGate = new(1, 1);
-    public async Task<object?> CaptureTargetAsync() => await ReadTargetAsync();
+    public async Task<object?> CaptureTargetAsync() { LastTarget = null; return await ReadTargetAsync(); }
 
     private async Task<Target?> ReadTargetAsync()
     {
@@ -33,6 +35,29 @@ internal sealed class TextDelivery : ITextDelivery
                     focused.TryGetCurrentPattern(TextPattern.Pattern, out _);
                 if (!editable || Native.GetForegroundWindow() != window) return null;
                 return new Target(window, (int)pid, focused.GetRuntimeId());
+            }
+            catch { return null; }
+            finally { uiaGate.Release(); }
+        });
+        try { return await task.WaitAsync(TimeSpan.FromMilliseconds(450)); }
+        catch (TimeoutException) { return null; }
+    }
+
+    public async Task<string?> ReadFieldAsync(Target original)
+    {
+        if (!await uiaGate.WaitAsync(0)) return null;
+        var task = Task.Run(() =>
+        {
+            try
+            {
+                if (Native.GetForegroundWindow() != original.Window) return null;
+                var focused = AutomationElement.FocusedElement;
+                if (focused is null || focused.Current.IsPassword || !focused.Current.HasKeyboardFocus ||
+                    focused.Current.ProcessId != original.ProcessId || !focused.GetRuntimeId().SequenceEqual(original.RuntimeId)) return null;
+                string? value = null;
+                if (focused.TryGetCurrentPattern(TextPattern.Pattern, out var text)) value = ((TextPattern)text).DocumentRange.GetText(12001);
+                else if (focused.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern)) value = ((ValuePattern)pattern).Current.Value;
+                return value?.Length <= 12000 && Native.GetForegroundWindow() == original.Window ? value : null;
             }
             catch { return null; }
             finally { uiaGate.Release(); }
@@ -66,6 +91,7 @@ internal sealed class TextDelivery : ITextDelivery
         // No clipboard writes, focus stealing, Return, or automatic resend.
         var count = Native.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Native.INPUT>());
         if (count != inputs.Length) return "Insertion blocked or incomplete — check the field before copying from History";
+        LastTarget = original;
         return "Text sent to the original field";
     }
 }

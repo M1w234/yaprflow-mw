@@ -21,7 +21,7 @@ try {
         & signtool sign /sha1 $CertificateThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 (Join-Path $publish 'yaprflow.exe')
         if ($LASTEXITCODE -ne 0) { throw 'Application signing failed.' }
     }
-    $zip = Join-Path $root 'artifacts/yaprflow-0.1.1-windows-x64-preview.zip'
+    $zip = Join-Path $root 'artifacts/yaprflow-0.2.0-windows-x64-preview.zip'
     Compress-Archive -Path "$publish/*" -DestinationPath $zip -Force
     if ($Installer) {
         $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
@@ -29,7 +29,7 @@ try {
         & $compiler (Join-Path $root 'installer/yaprflow.iss')
         if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
         if ($CertificateThumbprint) {
-            & signtool sign /sha1 $CertificateThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 (Join-Path $root 'artifacts/yaprflow-0.1.1-windows-x64-preview-setup.exe')
+            & signtool sign /sha1 $CertificateThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 (Join-Path $root 'artifacts/yaprflow-0.2.0-windows-x64-preview-setup.exe')
             if ($LASTEXITCODE -ne 0) { throw 'Installer signing failed.' }
         }
     }

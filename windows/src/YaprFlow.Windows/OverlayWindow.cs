@@ -7,6 +7,7 @@ internal sealed class OverlayWindow : Window
     private readonly TextBlock status = new() { Foreground = Brush("#E5F5EF"), FontSize = 13, Width = 250, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock time = new() { Foreground = Brush("#94D9BC"), Width = 48, VerticalAlignment = VerticalAlignment.Center };
     private readonly ProgressBar level = new() { Width = 44, Height = 6, Minimum = 0, Maximum = 1, Margin = new Thickness(8), Foreground = Brush("#94D9BC") };
+    private readonly TextBlock preview = new() { Foreground = Brush("#E5F5EF"), FontSize = 16, TextWrapping = TextWrapping.Wrap, MaxHeight = 130, Margin = new Thickness(12, 0, 12, 12), Visibility = Visibility.Collapsed };
     private readonly Button finish;
     private readonly Button cancel;
     public OverlayWindow(Action onCancel, Action onFinish)
@@ -21,7 +22,8 @@ internal sealed class OverlayWindow : Window
         finish = new Button { Content = "Finish", Focusable = false, Margin = new Thickness(4), Padding = new Thickness(9, 6, 9, 6) };
         cancel.Click += (_, _) => onCancel(); finish.Click += (_, _) => onFinish();
         row.Children.Add(cancel); row.Children.Add(level); row.Children.Add(status); row.Children.Add(time); row.Children.Add(finish);
-        Content = new Border { Background = Brush("#182322"), CornerRadius = new CornerRadius(22), Padding = new Thickness(12), Child = row, Margin = new Thickness(4) };
+        var content = new StackPanel(); content.Children.Add(row); content.Children.Add(preview);
+        Content = new Border { Background = Brush("#182322"), CornerRadius = new CornerRadius(22), Padding = new Thickness(12), Child = content, Margin = new Thickness(4) };
         SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(this).Handle;
@@ -48,6 +50,13 @@ internal sealed class OverlayWindow : Window
             Top = area.Bottom - Height - 24;
             Show();
         }
+    }
+    public void SetPreview(string text)
+    {
+        preview.Text = "Live draft\n" + (text.Length > 350 ? "…" + text[^350..] : text);
+        preview.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
+        Height = preview.Visibility == Visibility.Visible ? 220 : 90;
+        if (IsVisible) Top = SystemParameters.WorkArea.Bottom - Height - 24;
     }
     public void SetLevel(float value) => level.Value = Math.Clamp(value * 4, 0, 1);
     public void SetTime(TimeSpan elapsed) => time.Text = $"{(int)elapsed.TotalMinutes}:{elapsed.Seconds:00}";

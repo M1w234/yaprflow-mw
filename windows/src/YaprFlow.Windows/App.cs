@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using YaprFlow.Speech;
+using YaprFlow.Polish;
 using Forms = System.Windows.Forms;
 
 namespace YaprFlow.Windows;
@@ -47,10 +48,19 @@ internal sealed class App : Application
 internal sealed class AppController : IDisposable
 {
     private readonly JsonStore store;
+    private readonly ModifierGestures gestures = new();
     private readonly HotkeyService hotkeys = new();
-    private readonly RecordingSounds sounds = new();
+    private readonly RecordingSounds sounds;
     private readonly Microphone microphone;
     private readonly ParakeetRecognizer recognizer;
+    private readonly LocalPolisher polisher;
+    private readonly TextDelivery delivery = new();
+    private readonly CorrectionMonitor corrections;
+    public List<VocabularyRule> Suggestions { get; } = [];
+    public PolishModel PolishModel { get; }
+    public string PolishStatus { get; private set; } = "Optional · 610 MB download · runs on this PC";
+    private CancellationTokenSource? polishDownload;
+    public bool PolishDownloading => polishDownload is not null;
     private readonly Forms.NotifyIcon tray;
     private readonly OverlayWindow overlay;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -77,16 +87,32 @@ internal sealed class AppController : IDisposable
     public AppController(string directory)
     {
         store = new(directory);
+        sounds = new RecordingSounds(Path.Combine(directory, "sounds"));
         Settings = store.Read("settings.json", () => new Settings());
         Settings.Validate();
+        if (Settings.MicrophoneId is null && Settings.MicrophoneDevice >= 0)
+        {
+            var migrated = Microphone.LegacyId(Settings.MicrophoneDevice);
+            Settings = Settings with { MicrophoneId = migrated ?? "legacy-input-unavailable", MicrophoneDevice = -1 };
+            store.Write("settings.json", Settings);
+            if (migrated is null) Notice = "Please choose your microphone again in Dictation. Windows could not identify the previous input.";
+        }
         History = Settings.KeepHistory ? store.Read("history.json", () => new List<HistoryEntry>()).Take(200).ToList() : [];
         Vocabulary = store.Read("vocabulary.json", () => new List<VocabularyRule>
         { new("yapper flow", "yaprflow"), new("yabber flow", "yaprflow") });
         TextProcessing.ValidateVocabulary(Vocabulary);
         Installer = new(Path.Combine(directory, "models", ModelCatalog.Id));
-        microphone = new(() => Settings.MicrophoneDevice);
+        microphone = new(() => Settings.MicrophoneId);
         recognizer = new(Installer);
-        Session = new(microphone, recognizer, new TextDelivery(), () => Settings, () => Vocabulary);
+        PolishModel = new(Path.Combine(directory, "models", "qwen3-0.6b"));
+        polisher = new(PolishModel);
+        corrections = new(delivery);
+        corrections.Suggested += rule =>
+        {
+            if (!Suggestions.Contains(rule) && Suggestions.Count < 20 && !Vocabulary.Contains(rule))
+            { Suggestions.Add(rule); SetNotice("A possible correction is ready to review in Vocabulary."); }
+        };
+        Session = new(microphone, recognizer, delivery, () => Settings, () => Vocabulary, polisher: polisher);
         overlay = new OverlayWindow(() => _ = Session.CancelAsync(), () => _ = Session.FinishAsync());
         Window = new MainWindow(this);
         tray = new Forms.NotifyIcon
@@ -103,6 +129,7 @@ internal sealed class AppController : IDisposable
         tray.ContextMenuStrip = menu;
         tray.DoubleClick += (_, _) => Show();
         Session.Changed += SessionChanged;
+        Session.PreviewChanged += () => overlay.SetPreview(Session.PreviewText);
         Session.Completed += Completed;
         hotkeys.Pressed += Pressed;
         hotkeys.Released += (id, shortcut) => { if (shortcut.Mode == TriggerMode.Hold && holdOwner == id) _ = Session.FinishAsync(); };
@@ -114,6 +141,20 @@ internal sealed class AppController : IDisposable
             var fallback = Settings with { Primary = new Shortcut(6, 0x78), External = null };
             if (hotkeys.Configure(fallback)) { Settings = fallback; Notice += " Ctrl + Shift + F9 is active for this session."; }
         }
+        gestures.Action += action =>
+        {
+            if (action is GestureAction.StartHold or GestureAction.StartLocked)
+            {
+                if (ModelBusy || !ModelReady || Session.IsBusy) { gestures.Reset(); return; }
+                holdOwner = -1; _ = Session.StartAsync();
+            }
+            else if (holdOwner == -1)
+            {
+                if (action == GestureAction.Cancel) _ = Session.CancelAsync();
+                else if (action == GestureAction.Finish) _ = Session.FinishAsync();
+            }
+        };
+        if (!gestures.Configure(Settings)) SetNotice("Modifier gesture unavailable. Your regular shortcut still works.");
         microphone.Level += level => Application.Current.Dispatcher.BeginInvoke(() => overlay.SetLevel(level));
         microphone.Fault += message => Application.Current.Dispatcher.BeginInvoke(async () =>
         { await Session.CancelAsync(); SetNotice(message); });
@@ -154,27 +195,38 @@ internal sealed class AppController : IDisposable
         holdOwner = shortcut.Mode == TriggerMode.Hold ? id : null;
         _ = Session.StartAsync();
     }
+    public void ImportSound(bool start, string path)
+    {
+        try
+        {
+            var file = sounds.Import(path);
+            if (SaveSettings(start ? Settings with { StartSoundPath = file } : Settings with { StopSoundPath = file }))
+                SetNotice("Custom " + (start ? "start" : "stop") + " sound saved");
+        }
+        catch (Exception ex) { SetNotice("Sound could not be imported: " + ex.Message); }
+    }
     public void PreviewSound(bool start)
     {
-        if (!Session.IsBusy) sounds.Play(start, Settings.SoundVolume);
+        if (!Session.IsBusy) sounds.Play(start, Settings.SoundVolume, start ? Settings.StartSoundPath : Settings.StopSoundPath);
     }
     private void SessionChanged()
     {
         var phase = Session.Phase;
         if (phase != previousPhase)
         {
+            if (phase == SessionPhase.Preparing) corrections.Stop();
             if (phase == SessionPhase.Preparing && !hotkeys.SetEscape(true))
                 SetNotice("Escape is in use by another app. Use Cancel on the recording pill or tray menu.");
             if (phase == SessionPhase.Listening)
             {
                 recordingTime.Restart();
-                if (Settings.Sounds) sounds.Play(true, Settings.SoundVolume);
+                if (Settings.Sounds) sounds.Play(true, Settings.SoundVolume, Settings.StartSoundPath);
             }
             if (phase == SessionPhase.Idle)
             {
-                holdOwner = null; recordingTime.Stop(); hotkeys.SetEscape(false);
+                holdOwner = null; gestures.Reset(); recordingTime.Stop(); hotkeys.SetEscape(false);
             }
-            if (previousPhase == SessionPhase.Listening && Settings.Sounds) sounds.Play(false, Settings.SoundVolume);
+            if (previousPhase == SessionPhase.Listening && Settings.Sounds) sounds.Play(false, Settings.SoundVolume, Settings.StopSoundPath);
             previousPhase = phase;
         }
         overlay.Update(phase, Session.Status);
@@ -183,6 +235,7 @@ internal sealed class AppController : IDisposable
     }
     private void Completed(HistoryEntry entry)
     {
+        if (Settings.LearnCorrections && entry.Delivery.StartsWith("Text sent", StringComparison.Ordinal)) corrections.Begin(entry.Text);
         History.Insert(0, entry);
         History = History.Take(Settings.KeepHistory ? 200 : 1).ToList();
         if (Settings.KeepHistory)
@@ -202,6 +255,7 @@ internal sealed class AppController : IDisposable
         try
         {
             candidate.Validate();
+            if (candidate.AIPolish && !PolishModel.IsInstalled) throw new InvalidOperationException("Download AI Polish in Models first.");
             if (!hotkeys.Configure(candidate)) { SetNotice("That shortcut is already in use. Your previous shortcut is still active."); return false; }
             try
             {
@@ -209,7 +263,8 @@ internal sealed class AppController : IDisposable
             }
             catch { hotkeys.Configure(Settings); throw; }
             Settings = candidate;
-            SetNotice("Settings saved");
+            if (!Settings.LearnCorrections) corrections.Stop();
+            SetNotice(gestures.Configure(candidate) ? "Settings saved" : "Settings saved; modifier gesture unavailable. Your regular shortcut still works.");
             return true;
         }
         catch (Exception ex) { SetNotice("Could not save settings: " + ex.Message); return false; }
@@ -218,6 +273,16 @@ internal sealed class AppController : IDisposable
     {
         try { TextProcessing.ValidateVocabulary(candidate); store.Write("vocabulary.json", candidate); Vocabulary = candidate; SetNotice("Vocabulary saved"); }
         catch (Exception ex) { SetNotice("Could not save vocabulary: " + ex.Message); }
+    }
+    public void ReviewCorrection(VocabularyRule rule, bool accept)
+    {
+        if (accept)
+        {
+            var candidate = Vocabulary.Where(r => !r.Heard.Equals(rule.Heard, StringComparison.OrdinalIgnoreCase)).ToList();
+            candidate.Add(rule); SaveVocabulary(candidate);
+            if (!Vocabulary.Contains(rule)) return;
+        }
+        Suggestions.Remove(rule); Changed?.Invoke();
     }
     public void DeleteHistory(Guid? id)
     {
@@ -251,6 +316,20 @@ internal sealed class AppController : IDisposable
         finally { ModelBusy = false; download.Dispose(); download = null; Changed?.Invoke(); }
         if (Installer.IsInstalled) await WarmupAsync();
     }
+    public async Task DownloadPolishAsync()
+    {
+        if (ModelBusy || Session.IsBusy || PolishDownloading) return;
+        ModelBusy = true; polishDownload = new(); Changed?.Invoke();
+        try
+        {
+            await PolishModel.DownloadAsync(new Progress<double>(p => { PolishStatus = $"Downloading AI Polish · {p:P0}"; Changed?.Invoke(); }), polishDownload.Token);
+            PolishStatus = "AI Polish model verified · enable it in Dictation when ready";
+        }
+        catch (OperationCanceledException) { PolishStatus = "AI Polish download canceled"; }
+        catch (Exception ex) { PolishStatus = "AI Polish download failed: " + ex.Message; }
+        finally { polishDownload.Dispose(); polishDownload = null; ModelBusy = false; Changed?.Invoke(); }
+    }
+    public void CancelPolishDownload() => polishDownload?.Cancel();
     public void CancelDownload() => download?.Cancel();
     public void OpenDataFolder() { Directory.CreateDirectory(store.DirectoryPath); Process.Start(new ProcessStartInfo(store.DirectoryPath) { UseShellExecute = true }); }
     public async Task QuitAsync()
@@ -263,14 +342,14 @@ internal sealed class AppController : IDisposable
         }
         // Exit the process after disposing UI resources. Never dispose a native
         // recognizer while its worker is inside a native inference call.
-        exiting = true; download?.Cancel(); Application.Current.Shutdown();
+        exiting = true; download?.Cancel(); polishDownload?.Cancel(); Application.Current.Shutdown();
     }
     public void Dispose()
     {
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
-        sounds.Dispose();
-        timer.Stop(); hotkeys.Dispose(); tray.Visible = false; tray.Dispose(); overlay.Close();
-        if (!Session.IsBusy && !ModelBusy) recognizer.Dispose();
+        corrections.Dispose(); sounds.Dispose();
+        timer.Stop(); gestures.Dispose(); hotkeys.Dispose(); tray.Visible = false; tray.Dispose(); overlay.Close();
+        if (!Session.IsBusy && !ModelBusy) { recognizer.Dispose(); polisher.Dispose(); }
     }
 }

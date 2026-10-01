@@ -5,6 +5,8 @@ public interface IAudioRecorder
 {
     Task StartAsync(CancellationToken token);
     Task<float[]> StopAsync();
+    float[] Snapshot(int maximumSamples) => [];
+    float[] Since(int sampleOffset) => [];
 }
 public interface ISpeechRecognizer
 {
@@ -13,6 +15,7 @@ public interface ISpeechRecognizer
 }
 public interface ITextDelivery
 {
+    bool CanStreamNow => true;
     Task<object?> CaptureTargetAsync();
     Task<string> DeliverAsync(string text, object? target, CancellationToken token);
 }
@@ -21,10 +24,14 @@ public interface ITextDelivery
 /// Native recognition may not be interruptible; keep the session busy until it ends,
 /// discard its result on cancellation, and never overlap native recognizer use.
 public sealed class DictationSession(IAudioRecorder audio, ISpeechRecognizer speech, ITextDelivery delivery,
-    Func<Settings> settings, Func<IReadOnlyList<VocabularyRule>> vocabulary)
+    Func<Settings> settings, Func<IReadOnlyList<VocabularyRule>> vocabulary, TimeSpan? previewInterval = null, ITextPolisher? polisher = null)
 {
     public SessionPhase Phase { get; private set; }
     public string Status { get; private set; } = "Ready";
+    public string PreviewText { get; private set; } = "";
+    public event Action? PreviewChanged;
+    private CancellationTokenSource? previewCancellation;
+    private Task previewTask = Task.CompletedTask;
     public bool IsBusy => Phase != SessionPhase.Idle;
     public event Action? Changed;
     public event Action<HistoryEntry>? Completed;
@@ -35,13 +42,24 @@ public sealed class DictationSession(IAudioRecorder audio, ISpeechRecognizer spe
     private Task? finishTask;
     private object? target;
     private Settings snapshot = new();
+    private readonly List<string> originals = [];
+    private string polishNotice = "";
+    private readonly List<string> phrases = [];
+    private readonly List<string> pending = [];
+    private int processedSamples;
+    private bool streamedAny;
+    private bool insertionBlocked;
+    private string insertionStatus = "";
 
     public Task StartAsync()
     {
         if (IsBusy) return Task.CompletedTask;
         cancellation?.Dispose();
         cancellation = new CancellationTokenSource();
-        finishRequested = false;
+        finishRequested = false; finishTask = null;
+        originals.Clear(); polishNotice = ""; phrases.Clear(); pending.Clear(); processedSamples = 0; streamedAny = false;
+        insertionBlocked = false; insertionStatus = "";
+        PreviewText = ""; PreviewChanged?.Invoke();
         snapshot = settings();
         Set(SessionPhase.Preparing, "Preparing microphone…");
         return startTask = StartCoreAsync(cancellation.Token);
@@ -60,6 +78,11 @@ public sealed class DictationSession(IAudioRecorder audio, ISpeechRecognizer spe
             token.ThrowIfCancellationRequested();
             if (finishRequested) { await FinishCoreAsync(token); return; }
             Set(SessionPhase.Listening, "Listening…");
+            if (snapshot.StreamingPreview || snapshot.StreamingInsertion)
+            {
+                previewCancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+                previewTask = PreviewLoopAsync(previewCancellation.Token);
+            }
         }
         catch (OperationCanceledException) { await DiscardAudioAsync(); Set(SessionPhase.Idle, "Canceled"); }
         catch (Exception ex) { await DiscardAudioAsync(); Set(SessionPhase.Idle, "Could not start: " + ex.Message); }
@@ -75,28 +98,32 @@ public sealed class DictationSession(IAudioRecorder audio, ISpeechRecognizer spe
         Set(SessionPhase.Transcribing, "Transcribing on this PC…");
         try
         {
-            var samples = await audio.StopAsync();
+            var stop = audio.StopAsync();
             recording = false;
+            await StopPreviewAsync();
+            var samples = await stop;
             token.ThrowIfCancellationRequested();
-            if (samples.Length < 1600 || !samples.Any(s => Math.Abs(s) > 0.005f))
+            samples = samples.Skip(processedSamples).ToArray();
+            if (phrases.Count == 0 && (samples.Length < 1600 || !samples.Any(s => Math.Abs(s) > 0.005f)))
             { Set(SessionPhase.Idle, "No speech captured — check your microphone"); return; }
-            var raw = await speech.TranscribeAsync(samples, token);
-            token.ThrowIfCancellationRequested();
-            var text = TextProcessing.ApplyVocabulary(raw, vocabulary());
-            if (snapshot.LightCleanup) text = TextProcessing.Cleanup(text);
-            if (string.IsNullOrWhiteSpace(text)) { Set(SessionPhase.Idle, "No speech recognized"); return; }
-            string result;
-            try
+            if (samples.Length >= 1600 && samples.Any(x => Math.Abs(x) > .005f))
             {
-                result = snapshot.AutomaticInsertion
-                    ? await delivery.DeliverAsync(text, target, token)
-                    : "Automatic insertion is off";
+                var raw = await speech.TranscribeAsync(samples, token);
+                token.ThrowIfCancellationRequested();
+                await AddPhraseAsync(raw, token);
             }
-            catch (OperationCanceledException) { throw; }
-            catch { result = "Not inserted — delivery failed; copy from History"; }
+            var text = string.Join(" ", phrases);
+            if (string.IsNullOrWhiteSpace(text)) { Set(SessionPhase.Idle, "No speech recognized"); return; }
+            string result = "Automatic insertion is off";
+            if (snapshot.AutomaticInsertion)
+            {
+                if (!insertionBlocked && pending.Count > 0) await FlushPendingAsync(token, final: true);
+                result = insertionBlocked ? (streamedAny ? "Partially inserted — remaining text is in History. " : "") + insertionStatus
+                    : streamedAny ? "Text sent to the original field" : insertionStatus;
+            }
             token.ThrowIfCancellationRequested();
-            Completed?.Invoke(new HistoryEntry(Guid.NewGuid(), DateTimeOffset.Now, text, result));
-            Set(SessionPhase.Idle, result);
+            Completed?.Invoke(new HistoryEntry(Guid.NewGuid(), DateTimeOffset.Now, text, result + polishNotice, snapshot.AIPolish ? string.Join(" ", originals) : null));
+            Set(SessionPhase.Idle, result + polishNotice);
         }
         catch (OperationCanceledException) { await DiscardAudioAsync(); Set(SessionPhase.Idle, "Canceled"); }
         catch (Exception ex) { await DiscardAudioAsync(); Set(SessionPhase.Idle, "Dictation failed: " + ex.Message); }
@@ -108,10 +135,78 @@ public sealed class DictationSession(IAudioRecorder audio, ISpeechRecognizer spe
         if (Phase == SessionPhase.Listening)
         {
             Set(SessionPhase.Canceling, "Canceling…");
+            await StopPreviewAsync();
             await DiscardAudioAsync();
             Set(SessionPhase.Idle, "Canceled");
         }
         else Set(SessionPhase.Canceling, "Canceling — waiting for local processing to finish…");
+    }
+    private async Task PreviewLoopAsync(CancellationToken token)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(previewInterval ?? TimeSpan.FromMilliseconds(1800), token);
+                if (snapshot.StreamingInsertion && pending.Count > 0 && delivery.CanStreamNow)
+                    await FlushPendingAsync(token, final: false);
+                var samples = audio.Since(processedSamples);
+                if (samples.Length < 16000 || !samples.Any(x => Math.Abs(x) > .005f)) continue;
+                // Finalize only after a quiet boundary. Long uninterrupted speech
+                // remains a revisable draft and is recognized fully at release.
+                var quiet = samples.Length >= 11200 && Math.Sqrt(samples[^11200..].Average(x => (double)x * x)) < .006;
+                var previewSamples = quiet ? samples : samples.TakeLast(20 * 16000).ToArray();
+                var text = await speech.TranscribeAsync(previewSamples, token);
+                token.ThrowIfCancellationRequested();
+                if (Phase != SessionPhase.Listening) return;
+                if (quiet)
+                {
+                    await AddPhraseAsync(text, token);
+                    processedSamples += samples.Length;
+                    if (snapshot.StreamingInsertion && delivery.CanStreamNow) await FlushPendingAsync(token, final: false);
+                }
+                PreviewText = snapshot.StreamingPreview ? TextProcessing.ApplyVocabulary(text, vocabulary()) : "";
+                if (snapshot.StreamingInsertion && pending.Count > 0 && !delivery.CanStreamNow)
+                    Set(SessionPhase.Listening, "Listening · release modifier keys to insert text");
+                else Set(SessionPhase.Listening, "Listening…");
+                PreviewChanged?.Invoke();
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch { /* Live preview is optional; final recognition remains available. */ }
+    }
+    private async Task AddPhraseAsync(string raw, CancellationToken token)
+    {
+        var text = TextProcessing.ApplyVocabulary(raw.Trim(), vocabulary());
+        if (snapshot.LightCleanup) text = TextProcessing.Cleanup(text);
+        if (string.IsNullOrWhiteSpace(text)) return;
+        originals.Add(text);
+        if (snapshot.AIPolish && polisher is not null)
+        {
+            try { text = TextProcessing.ApplyVocabulary(await polisher.PolishAsync(text, token), vocabulary()); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { originals.RemoveAt(originals.Count - 1); throw; }
+            catch { polishNotice = " · AI Polish unavailable for some text; original kept"; }
+        }
+        token.ThrowIfCancellationRequested();
+        phrases.Add(text); pending.Add(text);
+    }
+    private async Task FlushPendingAsync(CancellationToken token, bool final)
+    {
+        if (!snapshot.AutomaticInsertion || insertionBlocked || pending.Count == 0) return;
+        try
+        {
+            var result = await delivery.DeliverAsync(string.Join(" ", pending) + (final ? "" : " "), target, token);
+            if (result.StartsWith("Text sent", StringComparison.Ordinal)) { pending.Clear(); streamedAny = true; }
+            else { insertionBlocked = true; insertionStatus = result; }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { insertionBlocked = true; insertionStatus = "Not inserted — delivery failed; copy from History"; }
+    }
+    private async Task StopPreviewAsync()
+    {
+        previewCancellation?.Cancel();
+        await previewTask;
+        previewCancellation?.Dispose(); previewCancellation = null;
     }
     private async Task DiscardAudioAsync()
     {
