@@ -20,3 +20,12 @@ Before offering beyond a preview test group:
 - Time cold startup and final-text latency for 5-, 30-, and 120-second dictations on at least an ordinary Intel and AMD laptop; include quiet and noisy audio. Compare transcript quality with the Mac app on the same recordings.
 
 Known limitations must be listed with the preview. Do not mark a row passed based only on a successful compile or unit test.
+
+## Preview 0.2.0 additions
+
+- Streaming with tap-to-toggle: phrases arrive at pauses, with no duplication at final stop. Change focus mid-stream and verify later phrases are withheld. Cancel after one insertion and verify nothing further arrives. Hold modifier keys and confirm text queues until release.
+- Unplug/replug the selected microphone and verify the same endpoint stays selected; unplug while recording and confirm cancellation and a useful notice. Check the Windows default input separately.
+- Test left and right Ctrl+Shift gestures, wrong-side combinations, ordinary Ctrl+Shift shortcuts, extra modifiers, double-tap lock, next-tap finish, Escape and the regular shortcut still available.
+- Import a short mono/stereo WAV, preview both cues, reset, change volume and mute cues. Confirm only yaprflow volume changes. Invalid/long files should fail with a clear message.
+- Download/cancel/retry AI Polish, then restart offline. Enable Polish and check latency, names/numbers and Copy original; interrupt during polishing and confirm no late insertion. Basic speech works without this optional model.
+- With correction learning off, no observation occurs. Enable it, edit one name in the just-used field, wait for a suggestion, then accept/dismiss. Move focus, edit surrounding text, use a password field or perform a broad rewrite; no suggestion should be learned. Only approved vocabulary persists.

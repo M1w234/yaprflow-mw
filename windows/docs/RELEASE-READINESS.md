@@ -15,7 +15,7 @@ Updated September 30, 2026. Preview 0.2.0 is a private candidate; no public rele
 ## Evidence
 
 - Prior 0.1.1 passed CI, installer upgrade preserving settings/history/model, and Michael's physical microphone dictation/browser insertion/quit-relaunch tests.
-- Current 0.2.0 has 54 behavior tests passing locally and a cross-compiled Windows build. Native Windows CI, real-model inference and rendered UI are required for this exact candidate.
+- Current 0.2.0 at fe6f416 passed [Windows CI](https://github.com/M1w234/yaprflow-mw/actions/runs/36819840085): all 54 behavior tests, native UI/shortcut checks, real speech and Polish inference, installer/uninstaller. Rendered screenshots were reviewed. Installed version 0.2.0.0 is running on the AMD PC; installer preserved settings/history and the existing speech model. Streaming is configured with tap-to-toggle. Optional Polish model is downloaded and verified; Polish remains off. The new app window has not yet been visually confirmed on that desktop because automated RustDesk input did not reliably act on Windows.
 - Microphone reconnect, streaming while speaking, modifier lock, custom sound listening, correction observation and AI Polish latency need a physical PC acceptance pass after upgrade.
 - Remote SSH/RustDesk reconnection after reboot passed previously; pre-login access remains unobserved. Remote access is test infrastructure, never a customer requirement.
 
