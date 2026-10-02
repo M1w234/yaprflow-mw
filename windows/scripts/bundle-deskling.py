@@ -27,44 +27,8 @@ shutil.copy2(args.installer, voice / 'yaprflow-setup.exe')
 (voice / 'installer-sha256.txt').write_text(digest + '\n')
 shutil.copy2(Path(__file__).resolve().parents[2] / 'LICENSE', package / 'LICENSE-yaprflow.txt')
 backend = package / 'tools/gift_setup/yaprflow.py'
-s = backend.read_text()
-s = s.replace('    if sys.platform != "darwin":', '    if sys.platform == "win32":\n        return install_windows(resources)\n    if sys.platform != "darwin":', 1)
-s = s.replace('    if session.windows:\n        return {"supported":False, "connected":False}\n', '')
-s += """
-
-def install_windows(resources):
-    import base64
-    import hashlib
-    source = Path(resources) / 'yaprflow-setup.exe'
-    expected = (Path(resources) / 'installer-sha256.txt').read_text().strip()
-    if hashlib.sha256(source.read_bytes()).hexdigest() != expected:
-        raise SetupError('The installer checksum failed. Get a fresh package.')
-    # Paths are quoted as PowerShell literals; no shell interpolation of user input.
-    literal = str(source).replace("'", "''")
-    script = ("$ErrorActionPreference='Stop'; $p='" + literal + "'; "
-              "$s=Get-AuthenticodeSignature -LiteralPath $p; "
-              "if($s.Status -ne 'Valid' -or !$s.TimeStamperCertificate -or "
-              "$s.SignerCertificate.GetNameInfo('SimpleName',$false) -ne 'Michael Wong') "
-              "{throw 'Publisher signature could not be verified'}; Start-Process -FilePath $p")
-    result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand',
-                             base64.b64encode(script.encode('utf-16le')).decode()], capture_output=True, timeout=30)
-    if result.returncode:
-        raise SetupError('The signed installer could not open. Check your connection and Windows security messages; do not bypass them.')
-    return {'launched': True}
-"""
-backend.write_text(s)
-html = package / 'tools/gift_setup/web/index.html'
-s = html.read_text()
-start = s.index('<details id="yaprflow-option">')
-end = s.index('<details id="news-settings"', start)
-s = s[:start] + '''<details id="yaprflow-option"><summary>Optional: add voice dictation with yaprflow</summary><p>Windows 11 · Intel or AMD x64. Install the signed app, select your microphone, and download its speech model once. Dictation then runs on your PC. Streaming is optional.</p><p>Quit an existing yaprflow before installing this update. The publisher is Michael Wong. Keep yaprflow and the Deskling companion open, then check the connection below.</p><p>Start, Stop, Cancel and toggle recording are available through the paired screen. Submit is disabled on Windows; review and send text yourself. Audio and transcripts stay in yaprflow.</p><button id="install-yaprflow" type="button">Open signed yaprflow installer</button><p id="yaprflow-install-status" class="status" role="status"></p><button id="check-yaprflow" type="button">Check yaprflow connection</button><p id="yaprflow-status" class="status" role="status"></p></details><p id="yaprflow-windows" hidden></p>
-''' + s[end:]
-html.write_text(s)
-js = package / 'tools/gift_setup/web/app.js'
-s = js.read_text().replace("$('yaprflow-option').hidden=true;$('yaprflow-windows').hidden=false;", "$('yaprflow-option').hidden=false;$('yaprflow-windows').hidden=true;")
-s = s.replace('Yaprflow installed. Finish its Setup Guide and permission prompts, then check below.', 'Installer opened. Finish installation, open yaprflow, select your mic and download its speech model, then check below.')
-s = s.replace('The gift candidate includes the bridge build.', 'This package includes the Windows bridge build. Start/Stop/Cancel are supported; Submit stays disabled.')
-js.write_text(s)
+if 'def install_windows(' not in backend.read_text():
+    raise SystemExit('Build Deskling from the shared source with Windows voice support first')
 (package / 'START-HERE.md').write_text('''# Deskling for Windows — integrated voice candidate
 
 Windows 11 on Intel or AMD x64. Extract this entire folder; do not run from inside the ZIP.
@@ -72,11 +36,11 @@ Windows 11 on Intel or AMD x64. Extract this entire folder; do not run from insi
 1. Open Start Deskling.cmd and install the PC companion using your own account.
 2. Pair the preloaded screen using its displayed setup Wi-Fi and password, then enter your home 2.4 GHz Wi-Fi details. Allow the companion on Private networks only if Windows asks.
 3. Return the computer to home Wi-Fi and check the screen connection.
-4. Expand Optional: add voice dictation with yaprflow. Quit an existing copy before opening the signed installer. Publisher: Michael Wong.
+4. Open Voice dictation in Deskling setup. Quit an existing copy before opening the signed installer. Publisher: Michael Wong.
 5. Open yaprflow, select the PC microphone, and download its speech model. Keep both apps running. Check yaprflow connection in Deskling setup.
 6. Focus a blank editable document on the PC. Use the screen to start/stop dictation or cancel. Ctrl + Alt + Space remains available. Streaming is optional; test with it off first.
 
-The PC microphone records your voice; the screen does not. Start/Stop/Cancel and toggle recording are supported. Submit is intentionally disabled on Windows: review and send text yourself. Losing the companion connection cancels a recording started by the screen. Audio and transcripts stay on the PC; only coarse state crosses the bridge.
+Uses your computer’s microphone. Start/Stop/Cancel and toggle recording are supported. Submit is intentionally disabled on Windows: review and send text yourself. Losing the companion connection cancels a recording started by the screen. Audio and transcripts stay on the PC; only coarse state crosses the bridge.
 
 The initial speech download requires internet. Thereafter ordinary dictation is local. Optional AI Polish requires its own model download. Unknown/password fields and changed focus block automatic insertion; recover the text from yaprflow History.
 

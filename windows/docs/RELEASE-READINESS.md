@@ -1,6 +1,6 @@
 # Windows parity and release readiness
 
-Updated October 1, 2026. Preview 0.2.2 is an integrated Deskling candidate; physical acceptance remains outstanding.
+Updated October 1, 2026. Preview 0.2.2 has passed Unit A dictation and microphone reconnect on the Windows PC. Broader recipient/device acceptance remains separate.
 
 ## Implemented in 0.2.1
 
@@ -34,7 +34,7 @@ Submit remains unavailable (`canSubmit=false`) because Windows does not implemen
 
 The signed 0.2.2 app, own assemblies, installer and generated uninstaller passed Windows trust and timestamp verification with publisher Michael Wong. All 64 behavior tests and the installed interactive UI smoke passed. The upgrade preserved existing data. The preceding 0.2.1 signing-source CI also completed successfully.
 
-`windows/scripts/bundle-deskling.py` creates a separate integrated Windows gift candidate from an existing Deskling Windows recipient package and the signed installer. It adds Windows installer signature/hash validation and connection checking without changing firmware or the original Deskling package. Physical screen acceptance is separate from software relay testing.
+`windows/scripts/bundle-deskling.py` creates a separate integrated Windows gift candidate from an existing Deskling Windows recipient package and the signed installer. The shared Deskling source now owns Windows installer signature/hash validation and connection checking. The bundler refuses an older source package lacking that support. No firmware flash is performed. `build-deskling-installer.ps1` wraps the consolidated package in a signed per-user installer with a branded Start-menu shortcut and signed uninstaller. Upgrade/uninstall preserve private pairing state and yaprflow data.
 
 ## Before public release
 
@@ -43,3 +43,11 @@ The signed 0.2.2 app, own assemblies, installer and generated uninstaller passed
 3. Verify installer upgrade preserving settings/history/vocabulary/custom cues/models and sign-in launch.
 4. Private beta, publisher signing, downloaded-installer verification and honest feature notes. Automatic updates and summarization remain out of scope.
 5. Review/merge the PR and publish separately approved signed artifacts/checksums with distinct Mac/Windows downloads.
+
+## October 1 final Windows integration checks
+
+- Michael confirmed Unit A triggers Windows dictation and text insertion with the DJI receiver connected, and unplug/replug recovers without restarting yaprflow. Both Mac and Windows currently use the computer microphone; onboard audio transport is deferred.
+- Shared Deskling setup, Windows installer trust gates, and relay: 39 tests passed.
+- Signed Deskling installer upgrade and uninstall/reinstall passed on the PC. Pairing key, pairing record, yaprflow settings and history hashes were preserved. Owned startup task removed on uninstall and restored on reinstall.
+- Production speech engine transcribed a synthetic test sentence while its process had all outbound network access blocked; blocked HTTP probe confirmed the offline condition. No user recording used.
+- No claims of fresh-recipient acceptance, Intel hardware acceptance, or broad public readiness are implied by the AMD/Unit A tests. Streaming is not a release gate.
