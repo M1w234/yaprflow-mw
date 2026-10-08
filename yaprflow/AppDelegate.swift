@@ -110,6 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         VocabularyWindowController.shared.show()
     }
 
+    @objc private func showCreator() {
+        CreatorWindowController.shared.show()
+    }
+
     @objc private func showSetup() {
         OnboardingWindowController.shared.show()
     }
@@ -301,6 +305,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         )
         setupItem.toolTip = "Reopen the first-run guide for permissions and the default shortcut."
         menu.addItem(setupItem)
+
+        let creatorItem = NSMenuItem(
+            title: "About & Creator…",
+            action: #selector(showCreator),
+            keyEquivalent: ""
+        )
+        creatorItem.target = self
+        creatorItem.image = NSImage(systemSymbolName: "person.crop.circle", accessibilityDescription: nil)
+        menu.addItem(creatorItem)
 
         let updateItem = NSMenuItem(
             title: "Check for Updates…",

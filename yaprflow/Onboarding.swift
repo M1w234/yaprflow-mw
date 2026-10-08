@@ -34,7 +34,7 @@ struct OnboardingView: View {
             }
             .transition(.opacity)
         }
-        .frame(width: 520, height: 520)
+        .frame(width: 520, height: 600)
         .onReceive(permissionPoller) { _ in
             micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
             accessibilityTrusted = AutoPaste.hasAccessibility
@@ -47,16 +47,19 @@ struct OnboardingView: View {
             Image(nsImage: NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath))
                 .resizable()
                 .interpolation(.high)
-                .frame(width: 128, height: 128)
+                .frame(width: 80, height: 80)
             Text("Yaprflow")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(.white)
-                .padding(.top, 24)
+                .padding(.top, 12)
             Text("Private, offline dictation for macOS")
                 .font(.system(size: 14))
                 .foregroundStyle(Color.white.opacity(0.55))
                 .padding(.top, 8)
-            Spacer()
+            CreatorCard()
+                .padding(.horizontal, 40)
+                .padding(.top, 24)
+            Spacer(minLength: 20)
             Button {
                 // The recommended path is intentionally opinionated: process
                 // the full recording for accuracy, then apply fast mechanical
@@ -68,8 +71,9 @@ struct OnboardingView: View {
                 Text("Get started").frame(maxWidth: .infinity)
             }
             .buttonStyle(OnboardingButtonStyle())
+            .keyboardShortcut(.defaultAction)
             .frame(width: 260)
-            .padding(.bottom, 48)
+            .padding(.bottom, 32)
         }
     }
 
@@ -401,7 +405,7 @@ struct OnboardingView: View {
     }
 }
 
-private struct OnboardingButtonStyle: ButtonStyle {
+struct OnboardingButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 14, weight: .semibold))
@@ -439,9 +443,9 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
         let hosting = NSHostingController(rootView: rootView)
         let newWindow = NSWindow(contentViewController: hosting)
-        // Must match OnboardingView's fixed frame (520×520) — a narrower
+        // Must match OnboardingView's fixed frame (520×600) — a narrower
         // window clips the mode-selection cards at both edges.
-        newWindow.setContentSize(NSSize(width: 520, height: 520))
+        newWindow.setContentSize(NSSize(width: 520, height: 600))
         newWindow.styleMask = [.titled, .closable, .fullSizeContentView]
         newWindow.titlebarAppearsTransparent = true
         newWindow.titleVisibility = .hidden

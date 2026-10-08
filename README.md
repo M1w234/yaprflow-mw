@@ -39,6 +39,11 @@ Download the `.dmg`, open it, and drag **yaprflow** to Applications. The speech
 model is already bundled, and the app is signed and notarized by Apple.
 [SETUP.md](SETUP.md) has the complete permission walkthrough.
 
+Version 3.3.5 adds a “Created by Michael Wong” card to first-run setup, with
+[Instagram](https://www.instagram.com/mikedubsdigital/) and
+[YouTube](https://www.youtube.com/@mikedubshi) links. You can revisit these
+anytime from **About & Creator…** in the menu bar.
+
 Starting with version 3.3.4, Yaprflow checks for signed updates automatically
 and notifies you when a new release is available. Choose **Check for Updates…**
 from the menu-bar app whenever you want to check manually.
