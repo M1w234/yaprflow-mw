@@ -40,8 +40,9 @@ model is already bundled, and the app is signed and notarized by Apple.
 [SETUP.md](SETUP.md) has the complete permission walkthrough.
 
 Version 3.3.5 adds a “Created by Michael Wong” card to first-run setup, with
-[Instagram](https://www.instagram.com/mikedubsdigital/) and
-[YouTube](https://www.youtube.com/@mikedubshi) links. You can revisit these
+[Instagram](https://www.instagram.com/mikedubs.hi/) and
+[YouTube](https://www.youtube.com/@mikedubshi), and
+[GitHub](https://github.com/M1w234) links. You can revisit these
 anytime from **About & Creator…** in the menu bar.
 
 Starting with version 3.3.4, Yaprflow checks for signed updates automatically

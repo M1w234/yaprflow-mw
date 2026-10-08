@@ -34,7 +34,7 @@ struct OnboardingView: View {
             }
             .transition(.opacity)
         }
-        .frame(width: 520, height: 600)
+        .frame(width: 520, height: 660)
         .onReceive(permissionPoller) { _ in
             micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
             accessibilityTrusted = AutoPaste.hasAccessibility
@@ -443,9 +443,9 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
         let hosting = NSHostingController(rootView: rootView)
         let newWindow = NSWindow(contentViewController: hosting)
-        // Must match OnboardingView's fixed frame (520×600) — a narrower
+        // Must match OnboardingView's fixed frame (520×660) — a narrower
         // window clips the mode-selection cards at both edges.
-        newWindow.setContentSize(NSSize(width: 520, height: 600))
+        newWindow.setContentSize(NSSize(width: 520, height: 660))
         newWindow.styleMask = [.titled, .closable, .fullSizeContentView]
         newWindow.titlebarAppearsTransparent = true
         newWindow.titleVisibility = .hidden

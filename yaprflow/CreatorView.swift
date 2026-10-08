@@ -11,15 +11,19 @@ struct CreatorCard: View {
         var id: String { title }
     }
 
-    // Public destinations linked from michaelwong.ai.
+    // Creator destinations: Instagram confirmed by Michael; YouTube and GitHub verified live.
     private let profiles: [Profile] = [
         Profile(
-            title: "Instagram", detail: "@mikedubsdigital", symbol: "camera",
-            url: URL(string: "https://www.instagram.com/mikedubsdigital/")!
+            title: "Instagram", detail: "@mikedubs.hi", symbol: "camera",
+            url: URL(string: "https://www.instagram.com/mikedubs.hi/")!
         ),
         Profile(
             title: "YouTube", detail: "@mikedubshi", symbol: "play.rectangle",
             url: URL(string: "https://www.youtube.com/@mikedubshi")!
+        ),
+        Profile(
+            title: "GitHub", detail: "M1w234", symbol: "chevron.left.forwardslash.chevron.right",
+            url: URL(string: "https://github.com/M1w234")!
         )
     ]
 
@@ -116,7 +120,7 @@ struct CreatorAboutView: View {
                 .frame(width: 260)
         }
         .padding(32)
-        .frame(width: 520, height: 560)
+        .frame(width: 520, height: 620)
         .background(.black)
         .onExitCommand(perform: onClose)
     }
@@ -137,7 +141,7 @@ final class CreatorWindowController: NSObject, NSWindowDelegate {
             self?.window?.close()
         })
         let newWindow = NSWindow(contentViewController: hosting)
-        newWindow.setContentSize(NSSize(width: 520, height: 560))
+        newWindow.setContentSize(NSSize(width: 520, height: 620))
         newWindow.styleMask = [.titled, .closable, .fullSizeContentView]
         newWindow.titlebarAppearsTransparent = true
         newWindow.titleVisibility = .hidden
