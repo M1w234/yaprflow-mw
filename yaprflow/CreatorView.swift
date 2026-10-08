@@ -126,6 +126,23 @@ struct CreatorAboutView: View {
     }
 }
 
+/// Handle cancellation at the native window as well as in SwiftUI. The
+/// SwiftUI exit command only receives Escape when its view owns focus.
+private final class CreatorWindow: NSWindow {
+    override func cancelOperation(_ sender: Any?) {
+        performClose(sender)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.keyCode == 53,
+           event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty {
+            performClose(nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 @MainActor
 final class CreatorWindowController: NSObject, NSWindowDelegate {
     static let shared = CreatorWindowController()
@@ -140,7 +157,7 @@ final class CreatorWindowController: NSObject, NSWindowDelegate {
         let hosting = NSHostingController(rootView: CreatorAboutView { [weak self] in
             self?.window?.close()
         })
-        let newWindow = NSWindow(contentViewController: hosting)
+        let newWindow = CreatorWindow(contentViewController: hosting)
         newWindow.setContentSize(NSSize(width: 520, height: 620))
         newWindow.styleMask = [.titled, .closable, .fullSizeContentView]
         newWindow.titlebarAppearsTransparent = true
