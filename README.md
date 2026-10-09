@@ -7,7 +7,7 @@
 
 ---
 
-A personal fork of [tmoreton/yaprflow](https://github.com/tmoreton/yaprflow) with the features I wanted for daily dictation. Same local-first speech pipeline (Parakeet TDT 0.6B on the Neural Engine), same Apache-2.0 license, same menubar app — plus a handful of additions:
+Local-first speech pipeline (Parakeet TDT 0.6B on the Neural Engine), same Apache-2.0 license, same menubar app — plus a handful of additions:
 
 - 📋 **Auto-paste** — synthesized ⌘V drops the transcript straight into the focused text field. Focus-race guarded (won't paste into the wrong window if you ⌘Tab away mid-recording) and bails on password fields.
 - ⏯️ **Hold-to-talk OR tap-to-toggle** — pick whichever feel fits the hotkey. Hold-to-talk supports modifier chords; tap-to-toggle is one press to start, one to stop.
@@ -70,7 +70,7 @@ Then click **Auto-Paste** in the menu again to re-prompt.
 
 ## Credits
 
-- All the heavy lifting (ASR pipeline, MLX integration, menubar architecture, grammar correction) is [Tim Moreton's](https://github.com/tmoreton). This fork only adds UX polish on top.
+- (ASR pipeline, MLX integration, menubar architecture, grammar correction) is [Tim Moreton's](https://github.com/tmoreton).
 - Speech model: [FluidInference's Parakeet TDT 0.6B v2 (CoreML)](https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml), CC-BY-4.0.
 
 ## License
