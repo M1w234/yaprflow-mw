@@ -1,6 +1,20 @@
 import Combine
 import SwiftUI
 
+enum CleanupMode: String, CaseIterable {
+    case off
+    case light
+    case polish
+
+    var displayName: String {
+        switch self {
+        case .off: return "Off"
+        case .light: return "Light"
+        case .polish: return "Polish"
+        }
+    }
+}
+
 enum TranscriptionStatus: Equatable {
     case idle
     case preparing(String)
@@ -9,8 +23,10 @@ enum TranscriptionStatus: Equatable {
     case correcting(String)
     case summarizing  // New: on-demand summary in progress
     case copied
-    /// Delivered via clipboard-free direct insertion (Preserve Clipboard on).
+    /// Delivered via clipboard-free direct insertion.
     case inserted
+    /// Recorded for comparison without inserting or changing the clipboard.
+    case captured
     case error(String)
 }
 
@@ -19,6 +35,8 @@ final class AppState: ObservableObject {
     static let shared = AppState()
 
     private static let streamingModeKey = "yaprflow.streamingMode"
+    private static let cleanupModeKey = "yaprflow.cleanupMode"
+    // Kept as a rollback-compatible mirror. Older builds only know this Bool.
     private static let grammarModeKey = "yaprflow.grammarMode"
     private static let autoPasteModeKey = "yaprflow.autoPasteMode"
     private static let screenContextModeKey = "yaprflow.screenContextMode"
@@ -45,20 +63,19 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// When `true`, run the finalized transcript through an on-device MLX LLM
-    /// for grammar / punctuation correction. The original text is still copied
-    /// to the clipboard immediately so the workflow doesn't block.
-    @Published var grammarMode: Bool {
+    /// Off preserves the ASR transcript, Light applies only synchronous,
+    /// deterministic cleanup, and Polish runs the on-device MLX LLM.
+    @Published var cleanupMode: CleanupMode {
         didSet {
-            UserDefaults.standard.set(grammarMode, forKey: Self.grammarModeKey)
+            UserDefaults.standard.set(cleanupMode.rawValue, forKey: Self.cleanupModeKey)
+            UserDefaults.standard.set(cleanupMode == .polish, forKey: Self.grammarModeKey)
         }
     }
 
-    /// When `true`, the final transcript is auto-pasted into the focused text
-    /// field via a synthesized ⌘V (in addition to landing on the clipboard).
-    /// Gated at the paste site on Accessibility permission, secure-input
-    /// state, and a focus-PID match captured at recording start. Defaults to
-    /// off so existing users aren't surprised by injected keystrokes.
+    /// When `true`, the final transcript is inserted directly into the focused
+    /// text field without touching the clipboard. Gated at the insertion site
+    /// on Accessibility permission, secure-input state, and a focus-PID match
+    /// captured at recording start.
     @Published var autoPasteMode: Bool {
         didSet {
             UserDefaults.standard.set(autoPasteMode, forKey: Self.autoPasteModeKey)
@@ -79,11 +96,9 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// When `true` (and Auto-Paste is on), deliver transcripts by direct
-    /// insertion — AX selected-text write, falling back to synthetic Unicode
-    /// typing — instead of clipboard + ⌘V, leaving whatever the user had
-    /// copied untouched. Falls back to the clipboard when neither insertion
-    /// mechanism works so the transcript is never lost.
+    /// Legacy compatibility mirror for builds that exposed a separate
+    /// Preserve Clipboard switch. Current builds always preserve it whenever
+    /// automatic insertion is enabled.
     @Published var preserveClipboardMode: Bool {
         didSet {
             UserDefaults.standard.set(preserveClipboardMode, forKey: Self.preserveClipboardModeKey)
@@ -99,10 +114,10 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// When `true`, each finished dictation is appended to
-    /// comparison-log.jsonl along with whatever a concurrently-running
-    /// second dictation engine (Wispr Flow) puts on the clipboard — data
-    /// for side-by-side quality analysis. Off by default; study tool.
+    /// When `true`, run as a silent comparison shadow: each finished dictation
+    /// is appended immediately to comparison-log.jsonl and Yaprflow does not
+    /// insert or touch the clipboard. Wispr Flow's side is paired later from
+    /// its local History database, independent of the destination app.
     @Published var comparisonLogMode: Bool {
         didSet {
             UserDefaults.standard.set(comparisonLogMode, forKey: Self.comparisonLogModeKey)
@@ -168,12 +183,17 @@ final class AppState: ObservableObject {
         if let stored = UserDefaults.standard.object(forKey: Self.streamingModeKey) as? Bool {
             self.streamingMode = stored
         } else {
-            self.streamingMode = true
+            self.streamingMode = false
         }
-        if let stored = UserDefaults.standard.object(forKey: Self.grammarModeKey) as? Bool {
-            self.grammarMode = stored
+        if let raw = UserDefaults.standard.string(forKey: Self.cleanupModeKey),
+           let stored = CleanupMode(rawValue: raw) {
+            self.cleanupMode = stored
+        } else if let legacyGrammar = UserDefaults.standard.object(forKey: Self.grammarModeKey) as? Bool {
+            // Exact behavioral migration: existing Grammar On stays Polish;
+            // existing Grammar Off stays Off. Fresh installs default to Light.
+            self.cleanupMode = legacyGrammar ? .polish : .off
         } else {
-            self.grammarMode = false
+            self.cleanupMode = .light
         }
         if let stored = UserDefaults.standard.object(forKey: Self.autoPasteModeKey) as? Bool {
             self.autoPasteMode = stored
@@ -188,7 +208,7 @@ final class AppState: ObservableObject {
         if let stored = UserDefaults.standard.object(forKey: Self.preserveClipboardModeKey) as? Bool {
             self.preserveClipboardMode = stored
         } else {
-            self.preserveClipboardMode = false
+            self.preserveClipboardMode = true
         }
         if let stored = UserDefaults.standard.object(forKey: Self.duckWhileRecordingKey) as? Bool {
             self.duckWhileRecording = stored

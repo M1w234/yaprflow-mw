@@ -151,7 +151,7 @@ struct NotchOverlayView: View {
             ProgressView()
                 .controlSize(.small)
                 .tint(.white)
-        case .copied, .inserted:
+        case .copied, .inserted, .captured:
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
                 .font(.system(size: 16, weight: .semibold))
@@ -182,7 +182,7 @@ struct NotchOverlayView: View {
             return state.liveTranscript.isEmpty ? "" : Self.wrappedTail(of: state.liveTranscript)
         case .correcting(let message):    return message
         case .summarizing:                return "Summarizing…"
-        case .copied, .inserted:
+        case .copied, .inserted, .captured:
             // No completion ceremony — the pill retracts immediately, so
             // showing the full text (or a label) here is dead weight.
             return ""

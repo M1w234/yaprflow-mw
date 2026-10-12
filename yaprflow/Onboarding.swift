@@ -1,39 +1,44 @@
 import AppKit
 import AVFoundation
+import Combine
 import SwiftUI
 
 private enum OnboardingStep {
     case welcome
-    case modeSelection
-    case grammarMode
-    case autoPaste
+    case automaticInsertion
     case permissions
+    case ready
 }
 
 struct OnboardingView: View {
     let onComplete: () -> Void
 
     @State private var step: OnboardingStep = .welcome
-    @State private var streamingSelected: Bool = AppState.shared.streamingMode
-    @State private var grammarSelected: Bool = false
-    @State private var autoPasteSelected: Bool = false
+    @State private var automaticInsertionSelected: Bool = true
     @State private var micStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+    @State private var accessibilityTrusted: Bool = AutoPaste.hasAccessibility
+
+    private let permissionPoller = Timer.publish(every: 0.75, on: .main, in: .common)
+        .autoconnect()
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             Group {
                 switch step {
-                case .welcome:        welcomeScreen
-                case .modeSelection:  modeSelectionScreen
-                case .grammarMode:    grammarModeScreen
-                case .autoPaste:      autoPasteScreen
-                case .permissions:    permissionsScreen
+                case .welcome:              welcomeScreen
+                case .automaticInsertion:   automaticInsertionScreen
+                case .permissions:          permissionsScreen
+                case .ready:                readyScreen
                 }
             }
             .transition(.opacity)
         }
         .frame(width: 520, height: 520)
+        .onReceive(permissionPoller) { _ in
+            micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+            accessibilityTrusted = AutoPaste.hasAccessibility
+        }
     }
 
     private var welcomeScreen: some View {
@@ -53,7 +58,12 @@ struct OnboardingView: View {
                 .padding(.top, 8)
             Spacer()
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) { step = .modeSelection }
+                // The recommended path is intentionally opinionated: process
+                // the full recording for accuracy, then apply fast mechanical
+                // cleanup. Alternative modes remain available under Advanced.
+                AppState.shared.streamingMode = false
+                AppState.shared.cleanupMode = .light
+                withAnimation(.easeInOut(duration: 0.25)) { step = .automaticInsertion }
             } label: {
                 Text("Get started").frame(maxWidth: .infinity)
             }
@@ -63,56 +73,13 @@ struct OnboardingView: View {
         }
     }
 
-    private var modeSelectionScreen: some View {
+    private var automaticInsertionScreen: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 48)
-            Text("Pick a dictation mode")
+            Text("Type where you're working")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(.white)
-            Text("You can change this anytime from the menu bar.")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.55))
-                .padding(.top, 8)
-            Spacer(minLength: 28)
-
-            HStack(spacing: 12) {
-                modeCard(
-                    title: "Streaming",
-                    tagline: "Text as you speak",
-                    body: "Words appear in real time while you talk. Best for everyday dictation and longer recordings — no length limit.",
-                    selected: streamingSelected,
-                    onTap: { streamingSelected = true }
-                )
-                modeCard(
-                    title: "Single-shot",
-                    tagline: "Most accurate",
-                    body: "Transcribes the whole clip when you stop. Slightly better accuracy on short dictations — best under 10 min.",
-                    selected: !streamingSelected,
-                    onTap: { streamingSelected = false }
-                )
-            }
-            .padding(.horizontal, 28)
-
-            Spacer()
-            Button {
-                AppState.shared.streamingMode = streamingSelected
-                withAnimation(.easeInOut(duration: 0.25)) { step = .grammarMode }
-            } label: {
-                Text("Continue").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(OnboardingButtonStyle())
-            .frame(width: 260)
-            .padding(.bottom, 40)
-        }
-    }
-
-    private var grammarModeScreen: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 48)
-            Text("Polish your dictation")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.white)
-            Text("Optional on-device AI features. Your text never leaves your Mac.")
+            Text("No pasting and no clipboard replacement.")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.white.opacity(0.55))
                 .padding(.top, 8)
@@ -120,67 +87,25 @@ struct OnboardingView: View {
 
             VStack(spacing: 12) {
                 featureToggleCard(
-                    title: "Auto-correct grammar",
-                    body: "Fixes spelling, punctuation, and sentence structure after each dictation. The first use may take a moment to download the model.",
-                    isOn: $grammarSelected
+                    title: "Automatic Insertion",
+                    body: "Yaprflow types the finished transcript into the field you were using while leaving your clipboard untouched. macOS calls this Accessibility access.",
+                    isOn: $automaticInsertionSelected
                 )
                 infoCard(
-                    title: "Summarize on demand",
-                    body: "Condense any transcript into a concise paragraph — available anytime from the menu bar after you dictate."
+                    title: "Your words stay recoverable",
+                    body: "Every finished dictation is saved in History. If a field cannot accept insertion, Yaprflow keeps the transcript there instead of replacing your clipboard."
                 )
             }
             .padding(.horizontal, 28)
 
             Spacer()
             Button {
-                AppState.shared.grammarMode = grammarSelected
-                // Kick off the 788 MB grammar model download in the background
-                // as soon as the user opts in. AppDelegate's launch-time check
-                // already ran by the time we get here, so without this the
-                // download wouldn't start until first dictation (or next launch).
-                if grammarSelected {
-                    GrammarController.shared.preload()
-                }
-                withAnimation(.easeInOut(duration: 0.25)) { step = .autoPaste }
-            } label: {
-                Text("Continue").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(OnboardingButtonStyle())
-            .frame(width: 260)
-            .padding(.bottom, 40)
-        }
-    }
-
-    private var autoPasteScreen: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 48)
-            Text("Skip the manual ⌘V")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.white)
-            Text("Drop transcripts straight into whatever text field you're in.")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.55))
-                .padding(.top, 8)
-            Spacer(minLength: 28)
-
-            VStack(spacing: 12) {
-                featureToggleCard(
-                    title: "Auto-paste after each dictation",
-                    body: "Yaprflow will press ⌘V for you when transcription finishes. Needs Accessibility permission — you'll be asked next. Your transcript is always copied to the clipboard either way.",
-                    isOn: $autoPasteSelected
-                )
-            }
-            .padding(.horizontal, 28)
-
-            Spacer()
-            Button {
-                AppState.shared.autoPasteMode = autoPasteSelected
-                // Fire the AX prompt now so the system sheet appears
-                // while the user is still in onboarding context, instead
-                // of surprising them on first dictation. The call returns
-                // false synchronously; the user's actual answer arrives
-                // asynchronously and is rechecked at paste time.
-                if autoPasteSelected {
+                AppState.shared.autoPasteMode = automaticInsertionSelected
+                // Preserve Clipboard is now the only automatic-delivery
+                // behavior. Keep the legacy preference pinned on for rollback
+                // compatibility with older builds.
+                AppState.shared.preserveClipboardMode = true
+                if automaticInsertionSelected {
                     _ = AutoPaste.promptForAccessibility()
                 }
                 withAnimation(.easeInOut(duration: 0.25)) { step = .permissions }
@@ -268,67 +193,47 @@ struct OnboardingView: View {
         )
     }
 
-    private func modeCard(
-        title: String,
-        tagline: String,
-        body: String,
-        selected: Bool,
-        onTap: @escaping () -> Void
-    ) -> some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(tagline)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(selected
-                                     ? Color.white.opacity(0.80)
-                                     : Color.white.opacity(0.45))
-                Spacer(minLength: 10)
-                Text(body)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.55))
-                    .multilineTextAlignment(.leading)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(selected ? 0.10 : 0.04))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.white.opacity(selected ? 0.35 : 0.08), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
     private var permissionsScreen: some View {
         VStack(spacing: 0) {
-            Spacer()
-            Image(systemName: "mic.fill")
+            Spacer(minLength: 40)
+            Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 56))
                 .foregroundStyle(.white)
-                .frame(width: 128, height: 128)
+                .frame(width: 112, height: 112)
                 .background(
                     RoundedRectangle(cornerRadius: 28)
                         .fill(Color.white.opacity(0.08))
                 )
-            Text("Enable microphone")
-                .font(.system(size: 26, weight: .semibold))
+            Text("Finish setup")
+                .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(.white)
-                .padding(.top, 24)
-            Text("Yaprflow needs microphone access to transcribe\nyour voice. Audio never leaves your Mac.")
+                .padding(.top, 20)
+            Text("Yaprflow rechecks permissions automatically.")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.white.opacity(0.55))
                 .multilineTextAlignment(.center)
-                .lineSpacing(4)
                 .padding(.top, 8)
-            Spacer()
+
+            VStack(spacing: 10) {
+                permissionRow(
+                    icon: "mic.fill",
+                    title: "Microphone",
+                    detail: "Audio stays on this Mac",
+                    isReady: micStatus == .authorized
+                )
+                if automaticInsertionSelected {
+                    permissionRow(
+                        icon: "text.cursor",
+                        title: "Automatic Insertion",
+                        detail: "Leaves the clipboard untouched",
+                        isReady: accessibilityTrusted
+                    )
+                }
+            }
+            .padding(.horizontal, 48)
+            .padding(.top, 24)
+
+            Spacer(minLength: 20)
             VStack(spacing: 12) {
                 Button {
                     handlePrimaryAction()
@@ -338,8 +243,13 @@ struct OnboardingView: View {
                 .buttonStyle(OnboardingButtonStyle())
                 .frame(width: 260)
 
-                if micStatus != .authorized {
-                    Button("Skip for now") { onComplete() }
+                if micStatus == .authorized,
+                   automaticInsertionSelected,
+                   !accessibilityTrusted {
+                    Button("Finish without Automatic Insertion") {
+                        AppState.shared.autoPasteMode = false
+                        onComplete()
+                    }
                         .buttonStyle(.plain)
                         .font(.system(size: 12))
                         .foregroundStyle(Color.white.opacity(0.45))
@@ -349,9 +259,110 @@ struct OnboardingView: View {
         }
     }
 
+    private var readyScreen: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(.white)
+            Text("Ready to dictate")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.top, 24)
+            Text("Hold Option + Shift while you speak,\nthen release to insert your words.")
+                .font(.system(size: 14))
+                .foregroundStyle(Color.white.opacity(0.62))
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .padding(.top, 10)
+
+            HStack(spacing: 8) {
+                shortcutKey("⌥")
+                shortcutKey("⇧")
+            }
+            .padding(.top, 28)
+
+            Text("A chime and the recording pill confirm when the microphone is live.")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.white.opacity(0.42))
+                .multilineTextAlignment(.center)
+                .frame(width: 330)
+                .padding(.top, 18)
+
+            Spacer()
+            Button {
+                onComplete()
+            } label: {
+                Text("Start using Yaprflow").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(OnboardingButtonStyle())
+            .frame(width: 260)
+            .padding(.bottom, 48)
+        }
+    }
+
+    private func shortcutKey(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 22, weight: .medium))
+            .foregroundStyle(.white)
+            .frame(width: 56, height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.09))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+            )
+    }
+
+    private func permissionRow(
+        icon: String,
+        title: String,
+        detail: String,
+        isReady: Bool
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.white.opacity(0.08)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.white.opacity(0.45))
+            }
+            Spacer()
+            Label(isReady ? "Ready" : "Needed",
+                  systemImage: isReady ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isReady ? Color.green : Color.orange)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
     private var primaryButtonTitle: String {
+        if micStatus == .authorized {
+            if automaticInsertionSelected, !accessibilityTrusted {
+                return "Enable Automatic Insertion"
+            }
+            return "You're all set"
+        }
         switch micStatus {
-        case .authorized:         return "You're all set"
+        case .authorized:          return "You're all set"
         case .denied, .restricted: return "Open System Settings"
         case .notDetermined:       return "Grant microphone access"
         @unknown default:          return "Continue"
@@ -359,9 +370,21 @@ struct OnboardingView: View {
     }
 
     private func handlePrimaryAction() {
+        if micStatus == .authorized {
+            if automaticInsertionSelected, !accessibilityTrusted {
+                if !AutoPaste.promptForAccessibility() {
+                    AutoPaste.openAccessibilitySettings()
+                }
+                accessibilityTrusted = AutoPaste.hasAccessibility
+                return
+            }
+            withAnimation(.easeInOut(duration: 0.25)) { step = .ready }
+            return
+        }
+
         switch micStatus {
         case .authorized:
-            onComplete()
+            break
         case .denied, .restricted:
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
                 NSWorkspace.shared.open(url)
@@ -370,9 +393,6 @@ struct OnboardingView: View {
             AVCaptureDevice.requestAccess(for: .audio) { _ in
                 DispatchQueue.main.async {
                     self.micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-                    if self.micStatus == .authorized {
-                        self.onComplete()
-                    }
                 }
             }
         @unknown default:
@@ -400,6 +420,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     private static let defaultsKey = "yaprflow.didCompleteOnboarding"
     private var window: NSWindow?
+    private var didFinishCurrentFlow = false
 
     static var hasCompleted: Bool {
         UserDefaults.standard.bool(forKey: defaultsKey)
@@ -441,6 +462,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     private func complete() {
+        didFinishCurrentFlow = true
         window?.close() // windowWillClose will finish the cleanup.
     }
 
@@ -448,7 +470,10 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     nonisolated func windowWillClose(_ notification: Notification) {
         Task { @MainActor in
-            UserDefaults.standard.set(true, forKey: Self.defaultsKey)
+            if self.didFinishCurrentFlow {
+                UserDefaults.standard.set(true, forKey: Self.defaultsKey)
+            }
+            self.didFinishCurrentFlow = false
             self.window = nil
             NSApp.setActivationPolicy(.accessory)
         }

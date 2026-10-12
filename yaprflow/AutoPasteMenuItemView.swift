@@ -1,10 +1,10 @@
 import AppKit
 import Combine
 
-/// Menu row for the Auto-Paste toggle. Three visible states:
+/// Menu row for clipboard-free automatic insertion. Three visible states:
 ///
 ///   - "Off"               — disabled (default)
-///   - "On"                — enabled AND Accessibility permission granted
+///   - "Ready"             — enabled AND Accessibility permission granted
 ///   - "Needs Permission"  — enabled but AX is missing/revoked; click re-prompts
 ///                           or opens System Settings → Privacy & Security
 ///
@@ -18,7 +18,7 @@ final class AutoPasteMenuItemView: MenuRowView {
     private var cancellable: AnyCancellable?
 
     init() {
-        super.init(symbolName: "text.viewfinder", title: "Auto-Paste")
+        super.init(symbolName: "text.cursor", title: "Automatic Insertion")
         cancellable = AppState.shared.$autoPasteMode
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.reload() }
@@ -34,7 +34,7 @@ final class AutoPasteMenuItemView: MenuRowView {
         if !AppState.shared.autoPasteMode {
             stateField.stringValue = "Off"
         } else if AutoPaste.hasAccessibility {
-            stateField.stringValue = "On"
+            stateField.stringValue = "Ready"
         } else {
             stateField.stringValue = "Needs Permission"
         }

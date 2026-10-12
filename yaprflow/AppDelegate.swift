@@ -5,13 +5,18 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var statusItem: NSStatusItem?
+    private var cleanupModeMenu: NSMenu?
     private var startSoundPickerMenu: NSMenu?
     private var stopSoundPickerMenu: NSMenu?
     private var statusIconCancellable: AnyCancellable?
+    private var cleanupModeCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         installStatusItem()
+        cleanupModeCancellable = AppState.shared.$cleanupMode
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshCleanupModeCheckmarks() }
         _ = NotchOverlayWindowController.shared
         registerHotkey()
         registerHistoryHotkey()
@@ -26,9 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // for older or incomplete app bundles.
         TranscriptionController.shared.preload()
 
-        // Preload the grammar model in the background if the user has enabled
-        // grammar mode (either via onboarding or from a prior session).
-        if AppState.shared.grammarMode {
+        // Polish mode uses the model directly. Shadow Comparison also queues
+        // a no-context Polish candidate after each recording, so pre-download
+        // the model without loading it into memory.
+        if AppState.shared.cleanupMode == .polish
+            || AppState.shared.comparisonLogMode {
             GrammarController.shared.preload()
         }
 
@@ -76,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @objc private func openVocabulary() {
         VocabularyStore.shared.openInEditor()
+    }
+
+    @objc private func showSetup() {
+        OnboardingWindowController.shared.show()
     }
 
     /// Re-launching or re-opening the app (Spotlight, double-click in Finder,
@@ -134,36 +145,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         menu.addItem(NSMenuItem.separator())
 
-        let streamingItem = NSMenuItem()
-        streamingItem.view = StreamingModeMenuItemView()
-        streamingItem.toolTip = "Show live partials while you speak. Turn off for single-shot mode — more accurate on longer dictations, but no text appears until you stop."
-        menu.addItem(streamingItem)
-
-        let grammarItem = NSMenuItem()
-        grammarItem.view = GrammarModeMenuItemView()
-        grammarItem.toolTip = "Run each transcript through an on-device LLM for grammar and punctuation correction."
-        menu.addItem(grammarItem)
+        let cleanupItem = NSMenuItem(title: "Cleanup", action: nil, keyEquivalent: "")
+        cleanupItem.image = NSImage(
+            systemSymbolName: "text.badge.checkmark",
+            accessibilityDescription: nil
+        )
+        cleanupItem.submenu = buildCleanupModeSubmenu()
+        cleanupItem.toolTip = "Off preserves the transcript. Light performs instant mechanical cleanup without changing your wording. Polish uses the on-device AI model for stronger grammar edits."
+        menu.addItem(cleanupItem)
 
         let autoPasteItem = NSMenuItem()
         autoPasteItem.view = AutoPasteMenuItemView()
-        autoPasteItem.toolTip = "After transcription, automatically paste into the focused text field. Requires Accessibility permission (System Settings → Privacy & Security → Accessibility)."
+        autoPasteItem.toolTip = "Insert the finished transcript directly into the focused text field without changing your clipboard. Requires Accessibility permission."
         menu.addItem(autoPasteItem)
-
-        let screenContextItem = NSMenuItem()
-        screenContextItem.view = ScreenContextMenuItemView()
-        screenContextItem.toolTip = "Reads a short window of text near your cursor (≈700 chars) and feeds it to the on-device grammar polish so it can spell proper nouns and brand names already on screen. Browsers, mail, messages, and password managers are skipped automatically. Stays on your Mac."
-        menu.addItem(screenContextItem)
-
-        let preserveClipboardItem = NSMenuItem()
-        preserveClipboardItem.view = ToggleMenuItemView(
-            symbolName: "list.clipboard",
-            title: "Preserve Clipboard",
-            publisher: AppState.shared.$preserveClipboardMode.eraseToAnyPublisher(),
-            get: { AppState.shared.preserveClipboardMode },
-            set: { AppState.shared.preserveClipboardMode = $0 }
-        )
-        preserveClipboardItem.toolTip = "With Auto-Paste on, insert transcripts directly into the focused field (Accessibility write, or synthetic typing) instead of pasting via the clipboard — whatever you had copied stays put. Falls back to the clipboard if the field doesn't accept insertion."
-        menu.addItem(preserveClipboardItem)
 
         let duckItem = NSMenuItem()
         duckItem.view = ToggleMenuItemView(
@@ -186,22 +180,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         duckItem.toolTip = "Mute system audio output while recording so music or video doesn't bleed into the mic. Volume is restored when you stop (unless you changed it yourself mid-recording)."
         menu.addItem(duckItem)
 
-        let comparisonItem = NSMenuItem()
-        comparisonItem.view = ToggleMenuItemView(
-            symbolName: "square.split.2x1",
-            title: "Comparison Log",
-            publisher: AppState.shared.$comparisonLogMode.eraseToAnyPublisher(),
-            get: { AppState.shared.comparisonLogMode },
-            set: { AppState.shared.comparisonLogMode = $0 }
-        )
-        comparisonItem.toolTip = "Study tool: log each dictation (raw + polished) plus whatever a second dictation app copies to the clipboard, for side-by-side quality analysis. Writes to Application Support/yaprflow/comparison-log.jsonl."
-        menu.addItem(comparisonItem)
-
         let soundsItem = NSMenuItem(title: "Sound Effects", action: nil, keyEquivalent: "")
         soundsItem.image = NSImage(systemSymbolName: "speaker.wave.2", accessibilityDescription: nil)
         soundsItem.submenu = buildSoundsSubmenu()
         soundsItem.toolTip = "Toggle start/stop chimes and pick which system sounds to use."
         menu.addItem(soundsItem)
+
+        let advancedItem = NSMenuItem(title: "Advanced", action: nil, keyEquivalent: "")
+        advancedItem.image = NSImage(
+            systemSymbolName: "gearshape.2",
+            accessibilityDescription: nil
+        )
+        advancedItem.submenu = buildAdvancedSubmenu()
+        advancedItem.toolTip = "Optional experimental and diagnostic controls."
+        menu.addItem(advancedItem)
 
         let launchAtLoginItem = NSMenuItem()
         launchAtLoginItem.view = LaunchAtLoginMenuItemView()
@@ -261,6 +253,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         menu.addItem(vocabularyItem)
 
         menu.addItem(NSMenuItem.separator())
+
+        let setupItem = NSMenuItem()
+        setupItem.view = IconActionMenuItemView(
+            symbolName: "checkmark.circle",
+            title: "Setup Guide…",
+            target: self,
+            action: #selector(showSetup)
+        )
+        setupItem.toolTip = "Reopen the first-run guide for permissions and the default shortcut."
+        menu.addItem(setupItem)
 
         menu.addItem(NSMenuItem(
             title: "Quit",
@@ -362,6 +364,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 || AppState.shared.stopSoundName != SoundEffect.defaultStopName
         }
         return true
+    }
+
+    // MARK: - Cleanup mode submenu
+
+    private func buildCleanupModeSubmenu() -> NSMenu {
+        let submenu = NSMenu()
+        for mode in CleanupMode.allCases {
+            let item = NSMenuItem(
+                title: mode.displayName,
+                action: #selector(selectCleanupMode(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = mode.rawValue
+            submenu.addItem(item)
+        }
+        cleanupModeMenu = submenu
+        refreshCleanupModeCheckmarks()
+        return submenu
+    }
+
+    @objc private func selectCleanupMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = CleanupMode(rawValue: raw) else { return }
+        AppState.shared.cleanupMode = mode
+        refreshCleanupModeCheckmarks()
+        if mode == .polish {
+            GrammarController.shared.preload()
+        }
+    }
+
+    private func refreshCleanupModeCheckmarks() {
+        let current = AppState.shared.cleanupMode
+        cleanupModeMenu?.items.forEach { item in
+            let mode = (item.representedObject as? String).flatMap(CleanupMode.init(rawValue:))
+            item.state = mode == current ? .on : .off
+        }
+    }
+
+    // MARK: - Advanced submenu
+
+    private func buildAdvancedSubmenu() -> NSMenu {
+        let submenu = NSMenu()
+
+        let streamingItem = NSMenuItem()
+        streamingItem.view = StreamingModeMenuItemView()
+        streamingItem.toolTip = "Experimental: show partial text while speaking. Single-shot mode is the recommended, more accurate default."
+        submenu.addItem(streamingItem)
+
+        let screenContextItem = NSMenuItem()
+        screenContextItem.view = ScreenContextMenuItemView()
+        screenContextItem.toolTip = "Used only in Polish mode. Reads a short window of text near your cursor so the on-device model can prefer spellings already on screen. Sensitive apps are skipped."
+        submenu.addItem(screenContextItem)
+
+        let comparisonItem = NSMenuItem()
+        comparisonItem.view = ToggleMenuItemView(
+            symbolName: "eye.slash",
+            title: "Shadow Comparison",
+            publisher: AppState.shared.$comparisonLogMode.eraseToAnyPublisher(),
+            get: { AppState.shared.comparisonLogMode },
+            set: {
+                AppState.shared.comparisonLogMode = $0
+                if $0 {
+                    GrammarController.shared.preload()
+                }
+            }
+        )
+        comparisonItem.toolTip = "Study tool: logs Yaprflow raw, Light, and queued Polish results silently while Wispr Flow inserts normally. Wispr's local history is paired later, so this works in every app without touching the clipboard."
+        submenu.addItem(comparisonItem)
+
+        return submenu
     }
 
     // MARK: - Sound Effects submenu
